@@ -25,7 +25,6 @@ endif()
 
 set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 23)
 set_property(TARGET ${PROJECT_NAME} PROPERTY C_STANDARD 17)
-# target_precompile_headers(${PROJECT_NAME} PRIVATE <vector>)
 
 target_include_directories(${PROJECT_NAME} PRIVATE ../SDL/include ../imgui ../imgui/backends ../ImGuiFileDialog ../glm ../cglm/include ../cgltf ../stb src/ ../Vulkan-Headers/build/install/include ../volk ../vma/include)
 

@@ -1,5 +1,8 @@
 #pragma once
 
+#include <string>
+#include <volk.h>
+
 #define SDL_CHECK(result)                \
     if (!result)                         \
     {                                    \
@@ -11,3 +14,5 @@
     {                                      \
         printf("%s %d\n", action, result); \
     }
+
+void Utils_SetObjectName(VkDevice device, VkObjectType type, uint64_t handle, const std::string& name);
