@@ -15,6 +15,7 @@ void Surface_PopulateData();
 void Surface_Destroy();
 
 void Device_Create();
+VkDevice Device_Device();
 void Device_Destroy();
 
 void Swapchain_Create();

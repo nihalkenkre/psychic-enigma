@@ -56,7 +56,7 @@ static int GraphicsThread(void* ptr)
 
 		SDL_UnlockMutex(graphics_mut);
 
-		SDL_Delay(100);
+		SDL_Delay(16);
 	}
 
 	return 0;
@@ -67,18 +67,18 @@ static int TransferThread(void* ptr)
 	srand(static_cast<uint32_t>(time(nullptr)) + static_cast<uint32_t>(SDL_GetThreadID(transfer_th)));
 	while (SDL_GetAtomicInt(&is_shutting_down) != 1)
 	{
-		printf("transfer thread\n");
+		//printf("transfer thread\n");
 
-		SDL_LockMutex(transfer_mut);
+		//SDL_LockMutex(transfer_mut);
 
-		TransferTask_Begin();
-		TransferTask_End();
-		TransferTask_Submit();
-		TransferTask_NextFrame();
+		////TransferTask_Begin();
+		////TransferTask_End();
+		////TransferTask_Submit();
+		////TransferTask_NextFrame();
 
-		SDL_UnlockMutex(transfer_mut);
+		//SDL_UnlockMutex(transfer_mut);
 
-		SDL_Delay(100);
+		//SDL_Delay(100);
 	}
 
 	return 0;
@@ -100,6 +100,8 @@ void Renderer_Destroy()
 
 	SDL_DestroyMutex(graphics_mut);
 	SDL_DestroyMutex(transfer_mut);
+
+	VK_CHECK("wait device", vkDeviceWaitIdle(Device_Device()));
 
 	TransferTask_Destroy();
 	GraphicsTask_Destroy();
