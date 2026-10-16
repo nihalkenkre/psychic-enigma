@@ -285,6 +285,11 @@ void Surface_PopulateData()
 	VK_CHECK("get surface capabilitites", vkGetPhysicalDeviceSurfaceCapabilities2KHR(physical_device_data.physical_device, &surface_info, &surface_data.capabilities));
 }
 
+VkExtent2D Surface_Extent()
+{
+	return surface_data.capabilities.surfaceCapabilities.currentExtent;
+}
+
 void Surface_Destroy()
 {
 	SDL_Vulkan_DestroySurface(instance, surface_data.surface, nullptr);
@@ -566,7 +571,6 @@ void Allocator_Create()
 	};
 
 	VK_CHECK("create allocator", vmaCreateAllocator(&allocator_create_info, &allocator));
-
 }
 
 void Allocator_Destroy()
@@ -794,7 +798,8 @@ void GraphicsTask_ChangeImageLayout(
 
 // Render to a different color target,
 // then blit the color target to the swapchain.
-void GraphicsTask_BeginRenderPass()
+// AcquireNextImage can move to q_present. |B)
+void GraphicsTask_BeginRenderPass(const std::vector<Image>& color_targets)
 {
 	const VkAcquireNextImageInfoKHR acq_info = {
 		.sType = VK_STRUCTURE_TYPE_ACQUIRE_NEXT_IMAGE_INFO_KHR,
@@ -806,12 +811,15 @@ void GraphicsTask_BeginRenderPass()
 
 	VK_CHECK("acquire next image", vkAcquireNextImage2KHR(device, &acq_info, &swapchain_data.acq_image_index));
 
-	GraphicsTask_ChangeImageLayout(
-		swapchain_data.images.at(swapchain_data.acq_image_index),
-		VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-		VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE,
-		VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT
-	);
+	for (const auto& color_target : color_targets)
+	{
+		GraphicsTask_ChangeImageLayout(
+			color_target.image,
+			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE,
+			VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT
+		);
+	}
 
 	const VkClearValue clear_value = {
 		.color = {
@@ -819,22 +827,26 @@ void GraphicsTask_BeginRenderPass()
 		}
 	};
 
-	const VkRenderingAttachmentInfo color_attachments[] = {
-		{
+	std::vector<VkRenderingAttachmentInfo> color_attachments;
+
+	for (const auto& color_target : color_targets)
+	{
+		color_attachments.push_back({
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-			.imageView = swapchain_data.image_views.at(swapchain_data.acq_image_index),
+			.imageView = color_target.image_view,
 			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 			.clearValue = clear_value,
-		},
-	};
+			});
+	}
+
 	const VkRenderingInfo rendering_info = {
 		.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
 		.renderArea = VkRect2D{.extent = surface_data.capabilities.surfaceCapabilities.currentExtent },
 		.layerCount = 1,
-		.colorAttachmentCount = _countof(color_attachments),
-		.pColorAttachments = color_attachments,
+		.colorAttachmentCount = static_cast<uint32_t>(color_attachments.size()),
+		.pColorAttachments = color_attachments.data(),
 	};
 
 	vkCmdBeginRendering(Task_CommandBuffer(graphics_task), &rendering_info);
@@ -917,13 +929,59 @@ void TransferTask_Destroy()
 	Task_Destroy(transfer_task);
 }
 
-Image Image_Create()
+Image Image_Create(const VkFormat format, const VkExtent3D& extent, const VkImageUsageFlags2KHR usage, const std::string& name)
 {
-	Image image = {};
-	const VkImageCreateInfo create_info = {};
-	const VmaAllocationCreateInfo allocation_create_info = {};
+	const uint32_t queue_family_indices[] = { physical_device_data.graphics_queue_family_index, physical_device_data.compute_queue_family_index, physical_device_data.transfer_queue_family_index };
 
-	VK_CHECK("create image", vmaCreateImage(allocator, &create_info, &allocation_create_info, &image.image, &image.allocation, &image.allocation_info.allocationInfo));
+	Image image = {};
+
+	const VkImageUsageFlags2CreateInfoKHR image_usage_create_info = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_USAGE_FLAGS_2_CREATE_INFO_KHR,
+		.usage = usage
+	};
+
+	const VkImageCreateInfo image_create_info = {
+	.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+	.pNext = &image_usage_create_info,
+	.imageType = VK_IMAGE_TYPE_2D,
+	.format = format,
+	.extent = extent,
+	.mipLevels = 1,
+	.arrayLayers = 1,
+	.samples = VK_SAMPLE_COUNT_1_BIT,
+	.tiling = VK_IMAGE_TILING_OPTIMAL,
+	.queueFamilyIndexCount = _countof(queue_family_indices),
+	.pQueueFamilyIndices = queue_family_indices,
+	};
+	const VmaAllocationCreateInfo allocation_create_info = { .usage = VMA_MEMORY_USAGE_AUTO };
+
+	VK_CHECK("create image", vmaCreateImage(allocator, &image_create_info, &allocation_create_info, &image.image, &image.allocation, &image.allocation_info.allocationInfo));
+
+	const VkImageViewCreateInfo image_view_create_info = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+		.image = image.image,
+		.viewType = VK_IMAGE_VIEW_TYPE_2D,
+		.format = format,
+		.subresourceRange = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.levelCount = 1,
+			.layerCount = 1
+		},
+	};
+
+	VK_CHECK("create image view", vkCreateImageView(device, &image_view_create_info, nullptr, &image.image_view));
+
+	const VkSamplerCreateInfo sampler_create_info = {
+		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+	};
+
+	VK_CHECK("create sampler", vkCreateSampler(device, &sampler_create_info, nullptr, &image.sampler));
+
+#ifdef _DEBUG
+	Utils_SetObjectName(device, VK_OBJECT_TYPE_IMAGE, reinterpret_cast<uint64_t>(image.image), name + " image");
+	Utils_SetObjectName(device, VK_OBJECT_TYPE_IMAGE_VIEW, reinterpret_cast<uint64_t>(image.image_view), name + " image view");
+	Utils_SetObjectName(device, VK_OBJECT_TYPE_SAMPLER, reinterpret_cast<uint64_t>(image.sampler), name + " sampler");
+#endif
 
 	return image;
 }
@@ -932,14 +990,14 @@ void Image_Destroy(Image image)
 {
 	if (device != VK_NULL_HANDLE)
 	{
-		if (image.image != VK_NULL_HANDLE)
-		{
-			vmaDestroyImage(allocator, image.image, image.allocation);
-		}
-
 		if (image.image_view != VK_NULL_HANDLE)
 		{
 			vkDestroyImageView(device, image.image_view, nullptr);
+		}
+
+		if (image.image != VK_NULL_HANDLE)
+		{
+			vmaDestroyImage(allocator, image.image, image.allocation);
 		}
 	}
 }

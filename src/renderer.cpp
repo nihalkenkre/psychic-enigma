@@ -17,6 +17,8 @@ static SDL_Mutex* transfer_mut;
 
 Renderer renderer = {};
 
+Image color_target = {};
+
 void Renderer_Create(SDL_Window* window)
 {
 	VK_CHECK("volk initialize", volkInitialize());
@@ -27,9 +29,18 @@ void Renderer_Create(SDL_Window* window)
 	Surface_PopulateData();
 	Device_Create();
 	Swapchain_Create();
+	Allocator_Create();
 
 	GraphicsTask_Create();
 	TransferTask_Create();
+
+	VkExtent2D surface_extent = Surface_Extent();
+	color_target = Image_Create(
+		VK_FORMAT_R32G32B32A32_SFLOAT,
+		VkExtent3D{ .width = surface_extent.width, .height = surface_extent.height, .depth = 1 },
+		VK_IMAGE_USAGE_2_COLOR_ATTACHMENT_BIT_KHR | VK_IMAGE_USAGE_2_TRANSFER_SRC_BIT_KHR,
+		"color target"
+	);
 }
 
 void Renderer_SetShuttingDown()
@@ -47,7 +58,7 @@ static int GraphicsThread(void* ptr)
 		SDL_LockMutex(graphics_mut);
 
 		GraphicsTask_Begin();
-		GraphicsTask_BeginRenderPass();
+		GraphicsTask_BeginRenderPass({ color_target });
 		GraphicsTask_EndRenderPass();
 		GraphicsTask_End();
 		GraphicsTask_Submit();
@@ -103,9 +114,11 @@ void Renderer_Destroy()
 
 	VK_CHECK("wait device", vkDeviceWaitIdle(Device_Device()));
 
+	Image_Destroy(color_target);
 	TransferTask_Destroy();
 	GraphicsTask_Destroy();
 
+	Allocator_Destroy();
 	Swapchain_Destroy();
 	Device_Destroy();
 	Surface_Destroy();
