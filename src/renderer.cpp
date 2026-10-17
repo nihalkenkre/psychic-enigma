@@ -1,9 +1,10 @@
 #include "renderer.hpp"
 #include "vulkan_objects.hpp"
-
+#include "tasks.hpp"
 #include "utils.hpp"
+
 #include <cstdio>
-#include <thread>
+#include <ctime>
 
 struct Renderer {
 	float value;
@@ -31,8 +32,8 @@ void Renderer_Create(SDL_Window* window)
 	Swapchain_Create();
 	Allocator_Create();
 
-	GraphicsTask_Create();
-	TransferTask_Create();
+	GraphicsTask_Create(Swapchain_MaxFramesInFlight());
+	TransferTask_Create(2);
 
 	VkExtent2D surface_extent = Surface_Extent();
 	color_target = Image_Create(
@@ -53,21 +54,17 @@ static int GraphicsThread(void* ptr)
 	srand(static_cast<uint32_t>(time(nullptr)) + static_cast<uint32_t>(SDL_GetThreadID(graphics_th)));
 	while (SDL_GetAtomicInt(&is_shutting_down) != 1)
 	{
-		printf("graphics thread\n");
-
 		SDL_LockMutex(graphics_mut);
 
 		GraphicsTask_Begin();
-		GraphicsTask_BeginRenderPass({ color_target });
+		GraphicsTask_BeginRenderPass({ color_target }, VkRect2D{ .extent = Surface_Extent() });
 		GraphicsTask_EndRenderPass();
 		GraphicsTask_End();
-		GraphicsTask_Submit();
+		GraphicsTask_Submit({}, {});
 		GraphicsTask_Present();
 		GraphicsTask_NextFrame();
 
 		SDL_UnlockMutex(graphics_mut);
-
-		SDL_Delay(16);
 	}
 
 	return 0;

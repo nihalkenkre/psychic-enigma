@@ -27,32 +27,11 @@ struct SwapchainData {
 	std::vector<VkImageView> image_views;
 	uint32_t image_count;
 
-	uint32_t max_frames_in_flight;
-	uint32_t current_frame_in_flight;
-
-	uint32_t acq_image_index;
-
 	std::vector<VkSemaphore> acq_sig_sems;
 	std::vector<VkSemaphore> prsnt_wait_sems;
-};
-
-struct Task {
-	VkCommandPool command_pool;
-	std::vector<VkCommandBuffer> command_buffers;
-	std::vector<VkSemaphore> semaphores;
-	std::vector<uint64_t> semaphore_values;
-
-	VkQueue queue;
-	uint32_t queue_family_index;
 
 	uint32_t max_frames_in_flight;
-	uint32_t current_frame;
-};
-
-enum ETaskType {
-	Graphics,
-	Transfer,
-	Compute,
+	uint32_t current_frame_in_flight;
 };
 
 static VkInstance instance = VK_NULL_HANDLE;
@@ -75,8 +54,6 @@ static SwapchainData swapchain_data = {};
 
 static VmaAllocator allocator = VK_NULL_HANDLE;
 
-static Task graphics_task = {};
-static Task transfer_task = {};
 
 constexpr uint32_t EXTRA_FRAMES_IN_FLIGHT = 2;
 
@@ -236,6 +213,21 @@ void Instance_Destroy()
 	{
 		vkDestroyInstance(instance, nullptr);
 	}
+}
+
+uint32_t PhysicalDeviceData_GraphicsQueueFamilyIndex()
+{
+	return physical_device_data.graphics_queue_family_index;
+}
+
+uint32_t PhysicalDeviceData_ComputeQueueFamilyIndex()
+{
+	return physical_device_data.compute_queue_family_index;
+}
+
+uint32_t PhysicalDeviceData_TransferQueueFamilyIndex()
+{
+	return physical_device_data.transfer_queue_family_index;
 }
 
 void Surface_Create(SDL_Window* window)
@@ -440,6 +432,21 @@ VkDevice Device_Device()
 	return device;
 }
 
+VkQueue Device_Graphics_Queue()
+{
+	return graphics_queue;
+}
+
+VkQueue Device_Compute_Queue()
+{
+	return compute_queue;
+}
+
+VkQueue Device_Transfer_Queue()
+{
+	return transfer_queue;
+}
+
 void Device_Destroy()
 {
 	if (device != VK_NULL_HANDLE)
@@ -523,6 +530,11 @@ void Swapchain_Create()
 #endif
 }
 
+VkSwapchainKHR Swapchain_Swapchain()
+{
+	return swapchain_data.swapchain;
+}
+
 VkSemaphore Swapchain_AcqSigSem()
 {
 	return swapchain_data.acq_sig_sems.at(swapchain_data.current_frame_in_flight);
@@ -531,6 +543,16 @@ VkSemaphore Swapchain_AcqSigSem()
 VkSemaphore Swapchain_PrsntWaitSem()
 {
 	return swapchain_data.prsnt_wait_sems.at(swapchain_data.current_frame_in_flight);
+}
+
+VkImage Swapchain_Image(uint32_t image_index)
+{
+	return swapchain_data.images.at(image_index);
+}
+
+uint32_t Swapchain_MaxFramesInFlight()
+{
+	return swapchain_data.max_frames_in_flight;
 }
 
 void Swapchain_NextFrame()
@@ -562,13 +584,17 @@ void Swapchain_Destroy()
 
 void Allocator_Create()
 {
-	const VmaAllocatorCreateInfo allocator_create_info = {
+	VmaAllocatorCreateInfo allocator_create_info = {
 		.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
 		.physicalDevice = physical_device_data.physical_device,
 		.device = device,
 		.instance = instance,
 		.vulkanApiVersion = vk_api_version,
 	};
+
+	VmaVulkanFunctions vk_funcs_ptr = {};
+	vmaImportVulkanFunctionsFromVolk(&allocator_create_info, &vk_funcs_ptr);
+	allocator_create_info.pVulkanFunctions = &vk_funcs_ptr;
 
 	VK_CHECK("create allocator", vmaCreateAllocator(&allocator_create_info, &allocator));
 }
@@ -578,371 +604,14 @@ void Allocator_Destroy()
 	vmaDestroyAllocator(allocator);
 }
 
-void Task_Create(Task& task, VkQueue queue, const uint32_t queue_family_index, const std::string& name)
-{
-	const VkSemaphoreTypeCreateInfo sem_type_ci = {
-		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
-		.initialValue = 0,
-	};
-
-	const VkSemaphoreCreateInfo sem_ci = {
-		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-		.pNext = &sem_type_ci,
-	};
-
-	VkSemaphoreSignalInfo sem_sig_info = {
-		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
-		.value = 1,
-	};
-
-	const VkCommandPoolCreateInfo cmd_pool_ci = {
-		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-		.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-		.queueFamilyIndex = physical_device_data.graphics_queue_family_index,
-	};
-
-	VK_CHECK("create command pool", vkCreateCommandPool(device, &cmd_pool_ci, nullptr, &task.command_pool));
-
-#ifdef _DEBUG
-	Utils_SetObjectName(device, VK_OBJECT_TYPE_COMMAND_POOL, reinterpret_cast<uint64_t>(task.command_pool), name + " command pool");
-#endif
-
-	task.max_frames_in_flight = swapchain_data.max_frames_in_flight;
-	task.command_buffers.resize(task.max_frames_in_flight);
-	task.semaphores.resize(task.max_frames_in_flight);
-	task.semaphore_values.resize(task.max_frames_in_flight, 1);
-	task.queue = queue;
-
-	const VkCommandBufferAllocateInfo allocate_info = {
-		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-		.commandPool = task.command_pool,
-		.commandBufferCount = task.max_frames_in_flight,
-	};
-
-	VK_CHECK("allocate command buffers", vkAllocateCommandBuffers(device, &allocate_info, task.command_buffers.data()));
-
-	for (uint32_t i = 0; i < task.max_frames_in_flight; ++i)
-	{
-		VK_CHECK("create semaphore", vkCreateSemaphore(device, &sem_ci, nullptr, task.semaphores.data() + i));
-
-#ifdef _DEBUG
-		Utils_SetObjectName(device, VK_OBJECT_TYPE_SEMAPHORE, reinterpret_cast<uint64_t>(task.semaphores.at(i)), name + " semaphore " + std::to_string(i));
-		Utils_SetObjectName(device, VK_OBJECT_TYPE_COMMAND_BUFFER, reinterpret_cast<uint64_t>(task.command_buffers.at(i)), name + " command buffer " + std::to_string(i));
-#endif
-		sem_sig_info.semaphore = task.semaphores.at(i);
-		VK_CHECK("signal semaphore", vkSignalSemaphore(device, &sem_sig_info));
-	}
-}
-
-VkCommandBuffer Task_CommandBuffer(const Task& task)
-{
-	return task.command_buffers.at(task.current_frame);
-}
-
-VkSemaphore Task_Semaphore(const Task& task)
-{
-	return task.semaphores.at(task.current_frame);
-}
-
-uint64_t& Task_SemaphoreValue(Task& task)
-{
-	return task.semaphore_values[task.current_frame];
-}
-
-void Task_Start(Task& task)
-{
-	VkSemaphore semaphore = Task_Semaphore(task);
-	uint64_t& value = Task_SemaphoreValue(task);
-
-	const VkSemaphoreWaitInfo wait_info = {
-		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
-		.semaphoreCount = 1,
-		.pSemaphores = &semaphore,
-		.pValues = &value,
-	};
-
-	VK_CHECK("wait semaphores", vkWaitSemaphores(device, &wait_info, UINT64_MAX));
-
-	const VkCommandBufferBeginInfo begin_info = {
-		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-	};
-
-	VK_CHECK("start task", vkBeginCommandBuffer(Task_CommandBuffer(task), &begin_info));
-}
-
-void Task_End(const Task& task)
-{
-	VK_CHECK("end task", vkEndCommandBuffer(Task_CommandBuffer(task)));
-}
-
-void Task_Submit(Task& task)
-{
-	const VkSemaphoreSubmitInfo wait_sem_infos[] = {
-		{
-			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-			.semaphore = Task_Semaphore(task),
-			.value = Task_SemaphoreValue(task),
-			.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-},
-{
-	.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-	.semaphore = Swapchain_AcqSigSem(),
-	.stageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-}
-	};
-
-	const VkCommandBufferSubmitInfo cmd_buff_infos[] = {
-		{
-			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
-			.commandBuffer = Task_CommandBuffer(task),
-}
-	};
-
-	const VkSemaphoreSubmitInfo sig_sem_infos[] = {
-		{
-			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-			.semaphore = Task_Semaphore(task),
-			.value = ++Task_SemaphoreValue(task),
-			.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-},
-{
-	.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-	.semaphore = Swapchain_PrsntWaitSem(),
-	.stageMask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
-}
-	};
-
-	const VkSubmitInfo2 submit_infos[] = {
-		{
-		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-		.waitSemaphoreInfoCount = _countof(wait_sem_infos),
-		.pWaitSemaphoreInfos = wait_sem_infos,
-		.commandBufferInfoCount = _countof(cmd_buff_infos),
-		.pCommandBufferInfos = cmd_buff_infos,
-		.signalSemaphoreInfoCount = _countof(sig_sem_infos),
-		.pSignalSemaphoreInfos = sig_sem_infos,
-},
-	};
-
-	VK_CHECK("queue submit", vkQueueSubmit2(task.queue, _countof(submit_infos), submit_infos, VK_NULL_HANDLE));
-}
-
-void Task_NextFrame(Task& task)
-{
-	task.current_frame = (task.current_frame + 1) % task.max_frames_in_flight;
-}
-
-void Task_Destroy(Task task)
-{
-	if (device != VK_NULL_HANDLE)
-	{
-		if (task.command_pool != VK_NULL_HANDLE)
-		{
-			vkDestroyCommandPool(device, task.command_pool, nullptr);
-		}
-
-		for (const auto sem : task.semaphores)
-		{
-			vkDestroySemaphore(device, sem, nullptr);
-		}
-	}
-}
-
-void GraphicsTask_Create()
-{
-	Task_Create(graphics_task, graphics_queue, physical_device_data.graphics_queue_family_index, "graphics task");
-}
-
-void GraphicsTask_Begin()
-{
-	Task_Start(graphics_task);
-}
-
-void GraphicsTask_ChangeImageLayout(
-	VkImage image,
-	VkImageLayout old_layout, VkImageLayout new_layout,
-	VkPipelineStageFlags2 src_stage_mask, VkAccessFlags2 src_access_mask,
-	VkPipelineStageFlags2 dst_stage_mask, VkAccessFlags2 dst_access_mask
-)
-{
-	const VkImageMemoryBarrier2 img_mem_barrs[] = {
-		{
-			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-			.srcStageMask = src_stage_mask,
-			.srcAccessMask = src_access_mask,
-			.dstStageMask = dst_stage_mask,
-			.dstAccessMask = dst_access_mask,
-			.oldLayout = old_layout,
-			.newLayout = new_layout,
-			.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-			.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-			.image = image,
-			.subresourceRange = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.levelCount = 1,
-			.layerCount = 1,
-},
-}
-	};
-
-	const VkDependencyInfo dependency_info = {
-		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-		.imageMemoryBarrierCount = _countof(img_mem_barrs),
-		.pImageMemoryBarriers = img_mem_barrs,
-	};
-
-	vkCmdPipelineBarrier2(Task_CommandBuffer(graphics_task), &dependency_info);
-}
-
-// Render to a different color target,
-// then blit the color target to the swapchain.
-// AcquireNextImage can move to q_present. |B)
-void GraphicsTask_BeginRenderPass(const std::vector<Image>& color_targets)
-{
-	const VkAcquireNextImageInfoKHR acq_info = {
-		.sType = VK_STRUCTURE_TYPE_ACQUIRE_NEXT_IMAGE_INFO_KHR,
-		.swapchain = swapchain_data.swapchain,
-		.timeout = UINT64_MAX,
-		.semaphore = Swapchain_AcqSigSem(),
-		.deviceMask = 1,
-	};
-
-	VK_CHECK("acquire next image", vkAcquireNextImage2KHR(device, &acq_info, &swapchain_data.acq_image_index));
-
-	for (const auto& color_target : color_targets)
-	{
-		GraphicsTask_ChangeImageLayout(
-			color_target.image,
-			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE,
-			VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT
-		);
-	}
-
-	const VkClearValue clear_value = {
-		.color = {
-			.float32 = {(float)rand() / RAND_MAX, (float)rand() / RAND_MAX, (float)rand() / RAND_MAX, 1},
-		}
-	};
-
-	std::vector<VkRenderingAttachmentInfo> color_attachments;
-
-	for (const auto& color_target : color_targets)
-	{
-		color_attachments.push_back({
-			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-			.imageView = color_target.image_view,
-			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-			.clearValue = clear_value,
-			});
-	}
-
-	const VkRenderingInfo rendering_info = {
-		.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-		.renderArea = VkRect2D{.extent = surface_data.capabilities.surfaceCapabilities.currentExtent },
-		.layerCount = 1,
-		.colorAttachmentCount = static_cast<uint32_t>(color_attachments.size()),
-		.pColorAttachments = color_attachments.data(),
-	};
-
-	vkCmdBeginRendering(Task_CommandBuffer(graphics_task), &rendering_info);
-}
-
-void GraphicsTask_EndRenderPass()
-{
-	vkCmdEndRendering(Task_CommandBuffer(graphics_task));
-	GraphicsTask_ChangeImageLayout(
-		swapchain_data.images.at(swapchain_data.acq_image_index),
-		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-		VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-		VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, VK_ACCESS_2_NONE
-	);
-}
-
-void GraphicsTask_End()
-{
-	Task_End(graphics_task);
-}
-
-void GraphicsTask_Submit()
-{
-	Task_Submit(graphics_task);
-}
-
-void GraphicsTask_Present()
-{
-	VkSemaphore wait_sem = Swapchain_PrsntWaitSem();
-
-	const VkPresentInfoKHR present_info = {
-		.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-		.waitSemaphoreCount = 1,
-		.pWaitSemaphores = &wait_sem,
-		.swapchainCount = 1,
-		.pSwapchains = &swapchain_data.swapchain,
-		.pImageIndices = &swapchain_data.acq_image_index,
-	};
-	VK_CHECK("queue present", vkQueuePresentKHR(graphics_task.queue, &present_info));
-}
-
-void GraphicsTask_NextFrame()
-{
-	Task_NextFrame(graphics_task);
-	Swapchain_NextFrame();
-}
-
-void GraphicsTask_Destroy()
-{
-	Task_Destroy(graphics_task);
-}
-
-void TransferTask_Create()
-{
-	Task_Create(transfer_task, transfer_queue, physical_device_data.transfer_queue_family_index, "transfer task");
-}
-
-void TransferTask_Begin()
-{
-	Task_Start(transfer_task);
-}
-
-void TransferTask_End()
-{
-	Task_End(transfer_task);
-}
-
-void TransferTask_Submit()
-{
-	Task_Submit(transfer_task);
-}
-
-void TransferTask_NextFrame()
-{
-	Task_NextFrame(transfer_task);
-}
-
-void TransferTask_Destroy()
-{
-	Task_Destroy(transfer_task);
-}
-
-Image Image_Create(const VkFormat format, const VkExtent3D& extent, const VkImageUsageFlags2KHR usage, const std::string& name)
+Image Image_Create(const VkFormat format, const VkExtent3D& extent, const VkImageUsageFlags usage, const std::string& name)
 {
 	const uint32_t queue_family_indices[] = { physical_device_data.graphics_queue_family_index, physical_device_data.compute_queue_family_index, physical_device_data.transfer_queue_family_index };
 
 	Image image = {};
 
-	const VkImageUsageFlags2CreateInfoKHR image_usage_create_info = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_USAGE_FLAGS_2_CREATE_INFO_KHR,
-		.usage = usage
-	};
-
 	const VkImageCreateInfo image_create_info = {
-	.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-	.pNext = &image_usage_create_info,
+    	.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 	.imageType = VK_IMAGE_TYPE_2D,
 	.format = format,
 	.extent = extent,
@@ -950,6 +619,7 @@ Image Image_Create(const VkFormat format, const VkExtent3D& extent, const VkImag
 	.arrayLayers = 1,
 	.samples = VK_SAMPLE_COUNT_1_BIT,
 	.tiling = VK_IMAGE_TILING_OPTIMAL,
+	.usage = usage,
 	.queueFamilyIndexCount = _countof(queue_family_indices),
 	.pQueueFamilyIndices = queue_family_indices,
 	};
@@ -990,6 +660,11 @@ void Image_Destroy(Image image)
 {
 	if (device != VK_NULL_HANDLE)
 	{
+		if (image.sampler != VK_NULL_HANDLE)
+		{
+			vkDestroySampler(device, image.sampler, nullptr);
+		}
+
 		if (image.image_view != VK_NULL_HANDLE)
 		{
 			vkDestroyImageView(device, image.image_view, nullptr);
