@@ -1,9 +1,10 @@
 #include "tasks.hpp"
-#include <volk.h>
-#include <vector>
-
 #include "utils.hpp"
 #include "vulkan_objects.hpp"
+#include "gui.hpp"
+
+#include <volk.h>
+#include <vector>
 
 struct Task {
 	VkCommandPool command_pool;
@@ -280,6 +281,11 @@ void GraphicsTask_BeginRenderPass(const std::vector<Image>& color_targets, const
 	_color_targets = color_targets;
 
 	vkCmdBeginRendering(Task_CommandBuffer(graphics_task), &rendering_info);
+}
+
+void GraphicsTask_RenderGUI()
+{
+	GUI_Render(Task_CommandBuffer(graphics_task));
 }
 
 void GraphicsTask_Render()

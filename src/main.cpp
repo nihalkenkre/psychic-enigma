@@ -35,6 +35,8 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event)
 		return SDL_APP_CONTINUE;
 	}
 
+	App_Event(event);
+
 	return SDL_APP_CONTINUE;
 }
 

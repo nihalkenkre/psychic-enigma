@@ -18,9 +18,11 @@ struct Image {
 };
 
 void Instance_Create();
+VkInstance Instance_Instance();
 void Instance_GetPhysicalDeviceData();
 void Instance_Destroy();
 
+VkPhysicalDevice PhysicalDeviceData_PhysicalDevice();
 uint32_t PhysicalDeviceData_GraphicsQueueFamilyIndex();
 uint32_t PhysicalDeviceData_ComputeQueueFamilyIndex();
 uint32_t PhysicalDeviceData_TransferQueueFamilyIndex();
@@ -28,6 +30,7 @@ uint32_t PhysicalDeviceData_TransferQueueFamilyIndex();
 void Surface_Create(SDL_Window* window);
 void Surface_PopulateData();
 VkExtent2D Surface_Extent();
+uint32_t Surface_MinImageCount();
 void Surface_Destroy();
 
 void Device_Create();
@@ -41,8 +44,9 @@ void Swapchain_Create();
 VkSwapchainKHR Swapchain_Swapchain();
 VkSemaphore Swapchain_AcqSigSem();
 VkSemaphore Swapchain_PrsntWaitSem();
-VkImage Swapchain_Image(uint32_t image_index);
 uint32_t Swapchain_MaxFramesInFlight();
+uint32_t Swapchain_ImageCount();
+VkImage Swapchain_Image(uint32_t image_index);
 void Swapchain_NextFrame();
 void Swapchain_Destroy();
 

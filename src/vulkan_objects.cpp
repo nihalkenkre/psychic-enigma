@@ -51,9 +51,7 @@ static VkQueue compute_queue = VK_NULL_HANDLE;
 static VkQueue transfer_queue = VK_NULL_HANDLE;
 
 static SwapchainData swapchain_data = {};
-
 static VmaAllocator allocator = VK_NULL_HANDLE;
-
 
 constexpr uint32_t EXTRA_FRAMES_IN_FLIGHT = 2;
 
@@ -116,6 +114,11 @@ void Instance_Create()
 	VK_CHECK("create instance", vkCreateInstance(&create_info, nullptr, &instance));
 
 	volkLoadInstance(instance);
+}
+
+VkInstance Instance_Instance()
+{
+	return instance;
 }
 
 void Instance_GetPhysicalDeviceData()
@@ -215,6 +218,11 @@ void Instance_Destroy()
 	}
 }
 
+VkPhysicalDevice PhysicalDeviceData_PhysicalDevice()
+{
+	return physical_device_data.physical_device;
+}
+
 uint32_t PhysicalDeviceData_GraphicsQueueFamilyIndex()
 {
 	return physical_device_data.graphics_queue_family_index;
@@ -280,6 +288,11 @@ void Surface_PopulateData()
 VkExtent2D Surface_Extent()
 {
 	return surface_data.capabilities.surfaceCapabilities.currentExtent;
+}
+
+uint32_t Surface_MinImageCount()
+{
+	return surface_data.capabilities.surfaceCapabilities.minImageCount;
 }
 
 void Surface_Destroy()
@@ -553,6 +566,11 @@ VkImage Swapchain_Image(uint32_t image_index)
 uint32_t Swapchain_MaxFramesInFlight()
 {
 	return swapchain_data.max_frames_in_flight;
+}
+
+uint32_t Swapchain_ImageCount()
+{
+	return swapchain_data.image_count;
 }
 
 void Swapchain_NextFrame()

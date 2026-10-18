@@ -2,6 +2,7 @@
 #include "vulkan_objects.hpp"
 #include "tasks.hpp"
 #include "utils.hpp"
+#include "gui.hpp"
 
 #include <cstdio>
 #include <ctime>
@@ -21,6 +22,7 @@ static SDL_Mutex* transfer_mut;
 Renderer renderer = {};
 
 Image color_target = {};
+Image gui_target = {};
 
 void Renderer_Create(SDL_Window* window)
 {
@@ -33,6 +35,7 @@ void Renderer_Create(SDL_Window* window)
 	Device_Create();
 	Swapchain_Create();
 	Allocator_Create();
+	GUI_Create(window);
 
 	GraphicsTask_Create(Swapchain_MaxFramesInFlight());
 	ComputeTask_Create(2);
@@ -44,6 +47,12 @@ void Renderer_Create(SDL_Window* window)
 		VkExtent3D{ .width = surface_extent.width, .height = surface_extent.height, .depth = 1 },
 		VK_IMAGE_USAGE_2_COLOR_ATTACHMENT_BIT_KHR | VK_IMAGE_USAGE_2_TRANSFER_SRC_BIT_KHR,
 		"color target"
+	);
+	gui_target = Image_Create(
+		VK_FORMAT_R32G32B32A32_SFLOAT,
+		VkExtent3D{ .width = surface_extent.width, .height = surface_extent.height, .depth = 1 },
+		VK_IMAGE_USAGE_2_COLOR_ATTACHMENT_BIT_KHR | VK_IMAGE_USAGE_2_TRANSFER_SRC_BIT_KHR,
+		"gui target"
 	);
 }
 
@@ -57,10 +66,9 @@ static int GraphicsThread(void* ptr)
 	srand(static_cast<uint32_t>(time(nullptr)) + static_cast<uint32_t>(SDL_GetThreadID(graphics_th)));
 	while (SDL_GetAtomicInt(&is_shutting_down) != 1)
 	{
-		printf("graphics thread\n");
-
 		GraphicsTask_Begin();
 		GraphicsTask_BeginRenderPass({ color_target }, VkRect2D{ .extent = Surface_Extent() });
+		GraphicsTask_RenderGUI();
 		GraphicsTask_EndRenderPass();
 		GraphicsTask_End();
 
@@ -79,11 +87,8 @@ static int GraphicsThread(void* ptr)
 
 static int ComputeThread(void* ptr)
 {
-	srand(static_cast<uint32_t>(time(nullptr)) + static_cast<uint32_t>(SDL_GetThreadID(graphics_th)));
 	while (SDL_GetAtomicInt(&is_shutting_down) != 1)
 	{
-		printf("compute thread\n");
-
 		ComputeTask_Begin();
 		ComputeTask_End();
 
@@ -102,11 +107,8 @@ static int ComputeThread(void* ptr)
 
 static int TransferThread(void* ptr)
 {
-	srand(static_cast<uint32_t>(time(nullptr)) + static_cast<uint32_t>(SDL_GetThreadID(transfer_th)));
 	while (SDL_GetAtomicInt(&is_shutting_down) != 1)
 	{
-		printf("transfer thread\n");
-
 		TransferTask_Begin();
 		TransferTask_End();
 
@@ -133,6 +135,11 @@ void Renderer_StartJobs()
 	transfer_th = SDL_CreateThread(TransferThread, "Transfer Thread", nullptr);
 }
 
+void Renderer_Event(SDL_Event* event)
+{
+	GUI_Event(event);
+}
+
 void Renderer_Destroy()
 {
 	SDL_WaitThread(transfer_th, nullptr);
@@ -145,11 +152,13 @@ void Renderer_Destroy()
 
 	VK_CHECK("wait device", vkDeviceWaitIdle(Device_Device()));
 
+	Image_Destroy(gui_target);
 	Image_Destroy(color_target);
 	TransferTask_Destroy();
 	ComputeTask_Destroy();
 	GraphicsTask_Destroy();
 
+	GUI_Destroy();
 	Allocator_Destroy();
 	Swapchain_Destroy();
 	Device_Destroy();
