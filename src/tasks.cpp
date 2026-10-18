@@ -25,6 +25,7 @@ enum ETaskType {
 };
 
 static Task graphics_task = {};
+static Task compute_task = {};
 static Task transfer_task = {};
 
 static std::vector<Image> _color_targets = {};
@@ -136,7 +137,7 @@ void Task_Submit(Task& task, std::vector<VkSemaphoreSubmitInfo> wait_sem_infos, 
 			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
 			.semaphore = Task_Semaphore(task),
 			.value = Task_SemaphoreValue(task),
-			.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+			.stageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
 		});
 
 	const VkCommandBufferSubmitInfo cmd_buff_infos[] = {
@@ -236,9 +237,6 @@ void GraphicsTask_ChangeImageLayout(
 	vkCmdPipelineBarrier2(Task_CommandBuffer(graphics_task), &dependency_info);
 }
 
-// Render to a different color target,
-// then blit the color target to the swapchain.
-// AcquireNextImage can move to q_present. |B)
 void GraphicsTask_BeginRenderPass(const std::vector<Image>& color_targets, const VkRect2D render_area)
 {
 	for (const auto& color_target : color_targets)
@@ -423,9 +421,9 @@ void TransferTask_End()
 	Task_End(transfer_task);
 }
 
-void TransferTask_Submit()
+void TransferTask_Submit(std::vector<VkSemaphoreSubmitInfo> wait_sem_infos, std::vector<VkSemaphoreSubmitInfo> sig_sem_infos)
 {
-	Task_Submit(transfer_task, {}, {});
+	Task_Submit(transfer_task, wait_sem_infos, sig_sem_infos);
 }
 
 void TransferTask_NextFrame()
@@ -436,4 +434,34 @@ void TransferTask_NextFrame()
 void TransferTask_Destroy()
 {
 	Task_Destroy(transfer_task);
+}
+
+void ComputeTask_Create(uint32_t max_frames_in_flight)
+{
+	Task_Create(compute_task, Device_Compute_Queue(), PhysicalDeviceData_ComputeQueueFamilyIndex(), max_frames_in_flight, "compute task");
+}
+
+void ComputeTask_Begin()
+{
+	Task_Start(compute_task);
+}
+
+void ComputeTask_End()
+{
+	Task_End(compute_task);
+}
+
+void ComputeTask_Submit(std::vector<VkSemaphoreSubmitInfo> wait_sem_infos, std::vector<VkSemaphoreSubmitInfo> sig_sem_infos)
+{
+	Task_Submit(compute_task, wait_sem_infos, sig_sem_infos);
+}
+
+void ComputeTask_NextFrame()
+{
+	Task_NextFrame(compute_task);
+}
+
+void ComputeTask_Destroy()
+{
+	Task_Destroy(compute_task);
 }

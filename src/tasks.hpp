@@ -13,10 +13,17 @@ void GraphicsTask_Present();
 void GraphicsTask_NextFrame();
 void GraphicsTask_Destroy();
 
+void ComputeTask_Create(uint32_t max_frames_in_flight);
+void ComputeTask_Begin();
+void ComputeTask_End();
+void ComputeTask_Submit(std::vector<VkSemaphoreSubmitInfo> wait_sem_infos, std::vector<VkSemaphoreSubmitInfo> sig_sem_infos);
+void ComputeTask_NextFrame();
+void ComputeTask_Destroy();
+
 void TransferTask_Create(uint32_t max_frames_in_flight);
 void TransferTask_Begin();
 void TransferTask_End();
-void TransferTask_Submit();
+void TransferTask_Submit(std::vector<VkSemaphoreSubmitInfo> wait_sem_infos, std::vector<VkSemaphoreSubmitInfo> sig_sem_infos);
 void TransferTask_NextFrame();
 void TransferTask_Destroy();
 

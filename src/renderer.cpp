@@ -13,6 +13,8 @@ struct Renderer {
 static SDL_AtomicInt is_shutting_down = SDL_AtomicInt(0);
 static SDL_Thread* graphics_th;
 static SDL_Mutex* graphics_mut;
+static SDL_Thread* compute_th;
+static SDL_Mutex* compute_mut;
 static SDL_Thread* transfer_th;
 static SDL_Mutex* transfer_mut;
 
@@ -33,6 +35,7 @@ void Renderer_Create(SDL_Window* window)
 	Allocator_Create();
 
 	GraphicsTask_Create(Swapchain_MaxFramesInFlight());
+	ComputeTask_Create(2);
 	TransferTask_Create(2);
 
 	VkExtent2D surface_extent = Surface_Extent();
@@ -54,20 +57,47 @@ static int GraphicsThread(void* ptr)
 	srand(static_cast<uint32_t>(time(nullptr)) + static_cast<uint32_t>(SDL_GetThreadID(graphics_th)));
 	while (SDL_GetAtomicInt(&is_shutting_down) != 1)
 	{
-		SDL_LockMutex(graphics_mut);
+		printf("graphics thread\n");
 
 		GraphicsTask_Begin();
 		GraphicsTask_BeginRenderPass({ color_target }, VkRect2D{ .extent = Surface_Extent() });
 		GraphicsTask_EndRenderPass();
 		GraphicsTask_End();
+
+		SDL_LockMutex(graphics_mut);
 		GraphicsTask_Submit({}, {});
 		GraphicsTask_Present();
+		SDL_UnlockMutex(graphics_mut);
+
 		GraphicsTask_NextFrame();
 
-		SDL_UnlockMutex(graphics_mut);
+		SDL_Delay(16);
 	}
 
 	return 0;
+}
+
+static int ComputeThread(void* ptr)
+{
+	srand(static_cast<uint32_t>(time(nullptr)) + static_cast<uint32_t>(SDL_GetThreadID(graphics_th)));
+	while (SDL_GetAtomicInt(&is_shutting_down) != 1)
+	{
+		printf("compute thread\n");
+
+		ComputeTask_Begin();
+		ComputeTask_End();
+
+		SDL_LockMutex(compute_mut);
+		ComputeTask_Submit({}, {});
+		SDL_UnlockMutex(compute_mut);
+
+		ComputeTask_NextFrame();
+
+		SDL_Delay(16);
+	}
+
+	return 0;
+
 }
 
 static int TransferThread(void* ptr)
@@ -75,18 +105,18 @@ static int TransferThread(void* ptr)
 	srand(static_cast<uint32_t>(time(nullptr)) + static_cast<uint32_t>(SDL_GetThreadID(transfer_th)));
 	while (SDL_GetAtomicInt(&is_shutting_down) != 1)
 	{
-		//printf("transfer thread\n");
+		printf("transfer thread\n");
 
-		//SDL_LockMutex(transfer_mut);
+		TransferTask_Begin();
+		TransferTask_End();
 
-		////TransferTask_Begin();
-		////TransferTask_End();
-		////TransferTask_Submit();
-		////TransferTask_NextFrame();
+		SDL_LockMutex(transfer_mut);
+		TransferTask_Submit({}, {});
+		SDL_UnlockMutex(transfer_mut);
 
-		//SDL_UnlockMutex(transfer_mut);
+		TransferTask_NextFrame();
 
-		//SDL_Delay(100);
+		SDL_Delay(16);
 	}
 
 	return 0;
@@ -95,24 +125,29 @@ static int TransferThread(void* ptr)
 void Renderer_StartJobs()
 {
 	graphics_mut = SDL_CreateMutex();
+	compute_mut = SDL_CreateMutex();
 	transfer_mut = SDL_CreateMutex();
 
 	graphics_th = SDL_CreateThread(GraphicsThread, "Graphics Thread", nullptr);
+	compute_th = SDL_CreateThread(ComputeThread, "Compute Thread", nullptr);
 	transfer_th = SDL_CreateThread(TransferThread, "Transfer Thread", nullptr);
 }
 
 void Renderer_Destroy()
 {
-	SDL_WaitThread(graphics_th, nullptr);
 	SDL_WaitThread(transfer_th, nullptr);
+	SDL_WaitThread(compute_th, nullptr);
+	SDL_WaitThread(graphics_th, nullptr);
 
-	SDL_DestroyMutex(graphics_mut);
 	SDL_DestroyMutex(transfer_mut);
+	SDL_DestroyMutex(compute_mut);
+	SDL_DestroyMutex(graphics_mut);
 
 	VK_CHECK("wait device", vkDeviceWaitIdle(Device_Device()));
 
 	Image_Destroy(color_target);
 	TransferTask_Destroy();
+	ComputeTask_Destroy();
 	GraphicsTask_Destroy();
 
 	Allocator_Destroy();
