@@ -38,6 +38,7 @@ void GUI_Create(SDL_Window* window)
 	VK_CHECK("create imgui desc pool", vkCreateDescriptorPool(Device_Device(), &pool_info, nullptr, &descriptor_pool));
 
 	ImGui::CreateContext();
+	ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	ImGui::GetIO().IniFilename = nullptr;
 	ImGui::GetIO().LogFilename = nullptr;
 

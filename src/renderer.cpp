@@ -102,7 +102,6 @@ static int ComputeThread(void* ptr)
 	}
 
 	return 0;
-
 }
 
 static int TransferThread(void* ptr)

@@ -253,7 +253,7 @@ void Surface_PopulateData()
 		VK_CHECK("get surface formats", vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device_data.physical_device, surface_data.surface, &surf_forms_count, surf_forms.data()));
 
 		auto it = std::find_if(surf_forms.begin(), surf_forms.end(), [](const VkSurfaceFormatKHR frm)
-			{ return (frm.format == VK_FORMAT_R8G8B8A8_UNORM) && (frm.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR); });
+			{ return (frm.format == VK_FORMAT_R8G8B8A8_SRGB) && (frm.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR); });
 
 		if (it != surf_forms.end())
 		{
@@ -478,7 +478,7 @@ void Swapchain_Create()
 		.imageColorSpace = surface_data.surface_format.surfaceFormat.colorSpace,
 		.imageExtent = surface_data.capabilities.surfaceCapabilities.currentExtent,
 		.imageArrayLayers = 1,
-		.imageUsage = surface_data.capabilities.surfaceCapabilities.supportedUsageFlags,
+		.imageUsage = surface_data.capabilities.surfaceCapabilities.supportedUsageFlags & ~VK_IMAGE_USAGE_STORAGE_BIT,
 		.queueFamilyIndexCount = 1,
 		.pQueueFamilyIndices = &physical_device_data.graphics_queue_family_index,
 		.preTransform = surface_data.capabilities.surfaceCapabilities.currentTransform,
