@@ -35,6 +35,14 @@ struct AddImages {
 	VkPipeline pipeline;
 	VkPipelineLayout pipeline_layout;
 	VkDescriptorSetLayout desc_set_layout;
+
+	// Heap
+	VkBuffer desc_heap;
+
+	// Buffer
+	VkBuffer desc_buffer;
+
+	// Indexing
 	VkDescriptorPool desc_pool;
 	VkDescriptorSet desc_set;
 };
@@ -518,7 +526,6 @@ void ComputeTask_AddImages_Create(const std::vector<Image>& color_targets, const
 	const VkDescriptorSetLayoutCreateInfo dsl_create_info = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.pNext = &binding_flags_ci,
-		.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
 		.bindingCount = _countof(dsl_set_0_bindings),
 		.pBindings = dsl_set_0_bindings,
 	};
@@ -554,37 +561,49 @@ void ComputeTask_AddImages_Create(const std::vector<Image>& color_targets, const
 
 	vkDestroyShaderModule(Device_Device(), shader_module, nullptr);
 
-	const VkDescriptorPoolSize pool_sizes[] = {
-		{
-			.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-			.descriptorCount = static_cast<uint32_t>(color_targets.size()) + 1 + 1,
-		}
-	};
+	if (descriptor_mode == EDescriptorMode::Heap)
+	{
 
-	const VkDescriptorPoolCreateInfo desc_pool_create_info = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-		.maxSets = 1,
-		.poolSizeCount = _countof(pool_sizes),
-		.pPoolSizes = pool_sizes,
-	};
-	VK_CHECK("create add images desc pool", vkCreateDescriptorPool(Device_Device(), &desc_pool_create_info, nullptr, &add_images.desc_pool));
+	}
+	else if (descriptor_mode == EDescriptorMode::Buffer)
+	{
 
-	const uint32_t desc_counts[] = { 1, 1, static_cast<uint32_t>(color_targets.size()) * 5 };
+	}
+	else if (descriptor_mode == EDescriptorMode::Index)
+	{
 
-	const VkDescriptorSetVariableDescriptorCountAllocateInfo var_cnt_desc_set_alloc_info = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
-		.descriptorSetCount = 1,
-		.pDescriptorCounts = desc_counts,
-	};
+		const VkDescriptorPoolSize pool_sizes[] = {
+			{
+				.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+				.descriptorCount = static_cast<uint32_t>(color_targets.size()) + 1 + 1,
+			}
+		};
 
-	const VkDescriptorSetAllocateInfo desc_set_alloc_info = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.pNext = &var_cnt_desc_set_alloc_info,
-		.descriptorPool = add_images.desc_pool,
-		.descriptorSetCount = 1,
-		.pSetLayouts = &add_images.desc_set_layout,
-	};
-	//VK_CHECK("allocate add images desc set", vkAllocateDescriptorSets(Device_Device(), &desc_set_alloc_info, &add_images.desc_set));
+		const VkDescriptorPoolCreateInfo desc_pool_create_info = {
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+			.maxSets = 1,
+			.poolSizeCount = _countof(pool_sizes),
+			.pPoolSizes = pool_sizes,
+		};
+		VK_CHECK("create add images desc pool", vkCreateDescriptorPool(Device_Device(), &desc_pool_create_info, nullptr, &add_images.desc_pool));
+
+		const uint32_t desc_counts[] = { 1, 1, static_cast<uint32_t>(color_targets.size()) * 5 };
+
+		const VkDescriptorSetVariableDescriptorCountAllocateInfo var_cnt_desc_set_alloc_info = {
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
+			.descriptorSetCount = 1,
+			.pDescriptorCounts = desc_counts,
+		};
+
+		const VkDescriptorSetAllocateInfo desc_set_alloc_info = {
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+			.pNext = &var_cnt_desc_set_alloc_info,
+			.descriptorPool = add_images.desc_pool,
+			.descriptorSetCount = 1,
+			.pSetLayouts = &add_images.desc_set_layout,
+		};
+		VK_CHECK("allocate add images desc set", vkAllocateDescriptorSets(Device_Device(), &desc_set_alloc_info, &add_images.desc_set));
+	}
 
 #ifdef _DEBUG
 	Utils_SetObjectName(Device_Device(), VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, reinterpret_cast<uint64_t>(add_images.desc_set_layout), std::string("Add Images") + " desc set layout");
@@ -592,9 +611,6 @@ void ComputeTask_AddImages_Create(const std::vector<Image>& color_targets, const
 	Utils_SetObjectName(Device_Device(), VK_OBJECT_TYPE_PIPELINE, reinterpret_cast<uint64_t>(add_images.pipeline), std::string("Add Images") + " pipeline");
 	Utils_SetObjectName(Device_Device(), VK_OBJECT_TYPE_DESCRIPTOR_POOL, reinterpret_cast<uint64_t>(add_images.desc_pool), std::string("Add Images") + " desc pool");
 #endif
-
-	VkDeviceSize layout_size = 0;
-	vkGetDescriptorSetLayoutSizeEXT(Device_Device(), add_images.desc_set_layout, &layout_size);
 }
 
 void ComputeTask_AddImages_Destroy()

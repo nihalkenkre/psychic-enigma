@@ -3,6 +3,15 @@
 #include <string>
 #include <volk.h>
 
+enum EDescriptorMode
+{
+    Heap,
+    Buffer,
+    Index,
+};
+
+extern EDescriptorMode descriptor_mode;
+
 #define SDL_CHECK(result)                \
     if (!result)                         \
     {                                    \

@@ -34,6 +34,8 @@ struct SwapchainData {
 	uint32_t current_frame_in_flight;
 };
 
+EDescriptorMode descriptor_mode = EDescriptorMode::Index;
+
 static VkInstance instance = VK_NULL_HANDLE;
 static uint32_t vk_api_version = 0;
 static PhysicalDeviceData physical_device_data = {
@@ -310,7 +312,6 @@ bool Device_CheckExtensionSupport(const char* ext_name, const std::vector<VkExte
 
 void Device_Create()
 {
-	bool is_descriptor_heap_supported = true;
 	std::vector<const char*> req_ext_names = {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 		VK_EXT_ROBUSTNESS_2_EXTENSION_NAME,
@@ -322,7 +323,16 @@ void Device_Create()
 	std::vector<VkExtensionProperties> props(property_count);
 	VK_CHECK("enumerate device extensions", vkEnumerateDeviceExtensionProperties(physical_device_data.physical_device, nullptr, &property_count, props.data()));
 
-	
+	if (Device_CheckExtensionSupport(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME, props)) {
+		req_ext_names.push_back(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME);
+		req_ext_names.push_back("VK_KHR_maintenance5");
+
+		descriptor_mode = EDescriptorMode::Heap;
+	}
+	else if (Device_CheckExtensionSupport(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME, props)) {
+		req_ext_names.push_back(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME);
+		descriptor_mode = EDescriptorMode::Buffer;
+	}
 
 	VkDeviceQueueCreateInfo q_ci = {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
@@ -365,14 +375,26 @@ void Device_Create()
 		d_q_ci.pQueuePriorities = priorities[d_q_ci_idx].data();
 	}
 
+	VkPhysicalDeviceDescriptorHeapFeaturesEXT desc_heap_feats = {
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT,
+	};
+
 	VkPhysicalDeviceDescriptorBufferFeaturesEXT desc_buff_feats = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT,
 	};
 
 	VkPhysicalDeviceDynamicRenderingFeatures dyn_rend_feats = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
-		.pNext = &desc_buff_feats,
 	};
+
+	if (descriptor_mode == EDescriptorMode::Heap)
+	{
+		dyn_rend_feats.pNext = &desc_heap_feats;
+	} 
+	else if (descriptor_mode == EDescriptorMode::Buffer)
+	{
+		dyn_rend_feats.pNext = &desc_buff_feats;
+	}
 
 	VkPhysicalDeviceSynchronization2Features sync2_feats = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
