@@ -25,12 +25,28 @@ enum ETaskType {
 	Compute,
 };
 
+struct AddImages {
+	struct PushConstantRange {
+		uint32_t image_width;
+		uint32_t image_height;
+		uint32_t image_count;
+	};
+
+	VkPipeline pipeline;
+	VkPipelineLayout pipeline_layout;
+	VkDescriptorSetLayout desc_set_layout;
+	VkDescriptorPool desc_pool;
+	VkDescriptorSet desc_set;
+};
+
 static Task graphics_task = {};
 static Task compute_task = {};
 static Task transfer_task = {};
 
 static std::vector<Image> _color_targets = {};
 static uint32_t swapchain_image_index = 0;
+
+static AddImages add_images = {};
 
 void Task_Create(Task& task, VkQueue queue, const uint32_t queue_family_index, const uint32_t max_frames_in_flight, const std::string& name)
 {
@@ -442,14 +458,171 @@ void TransferTask_Destroy()
 	Task_Destroy(transfer_task);
 }
 
-void ComputeTask_Create(uint32_t max_frames_in_flight)
+void ComputeTask_AddImages_Create(const std::vector<Image>& color_targets, const Image& gui_target)
+{
+	VkShaderModule shader_module = VK_NULL_HANDLE;
+
+	std::string shader_path = std::string(SDL_GetBasePath()).append("shaders\\add_images.slang.spv");
+
+	SDL_IOStream* io_stream = SDL_IOFromFile(shader_path.c_str(), "rb");
+	size_t code_size = 0;
+	uint32_t* code = reinterpret_cast<uint32_t*>(SDL_LoadFile_IO(io_stream, &code_size, true));
+
+	const VkShaderModuleCreateInfo create_info = {
+		.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+		.codeSize = static_cast<size_t>(code_size),
+		.pCode = code,
+	};
+
+	VK_CHECK("create add images shader module", vkCreateShaderModule(Device_Device(), &create_info, nullptr, &shader_module));
+	SDL_free(code);
+
+	const VkPipelineShaderStageCreateInfo shader_stage_create_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+		.module = shader_module,
+		.pName = "main"
+	};
+
+	const VkDescriptorSetLayoutBinding dsl_set_0_bindings[] = {
+		{
+			.binding = 0,
+			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			.descriptorCount = 1,
+			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		},
+		{
+			.binding = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			.descriptorCount = 1,
+			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		},
+		{
+			.binding = 2,
+			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			.descriptorCount = static_cast<uint32_t>(color_targets.size()) * 100,
+			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		},
+	};
+
+	const VkDescriptorBindingFlags binding_flags[] = {
+		0, 0, VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT | VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT
+	};
+
+	const VkDescriptorSetLayoutBindingFlagsCreateInfo binding_flags_ci = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+		.bindingCount = _countof(binding_flags),
+		.pBindingFlags = binding_flags
+	};
+
+	const VkDescriptorSetLayoutCreateInfo dsl_create_info = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		.pNext = &binding_flags_ci,
+		.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT,
+		.bindingCount = _countof(dsl_set_0_bindings),
+		.pBindings = dsl_set_0_bindings,
+	};
+
+	VK_CHECK("create add images dsl", vkCreateDescriptorSetLayout(Device_Device(), &dsl_create_info, nullptr, &add_images.desc_set_layout));
+
+	const VkPushConstantRange pc_rngs[] = {
+		{
+			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+			.size = sizeof(AddImages::PushConstantRange),
+		}
+	};
+
+	const VkPipelineLayoutCreateInfo pipeline_layout_create_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		.setLayoutCount = 1,
+		.pSetLayouts = &add_images.desc_set_layout,
+		.pushConstantRangeCount = _countof(pc_rngs),
+		.pPushConstantRanges = pc_rngs,
+	};
+
+	VK_CHECK("create add images layout", vkCreatePipelineLayout(Device_Device(), &pipeline_layout_create_info, nullptr, &add_images.pipeline_layout));
+
+	const VkComputePipelineCreateInfo create_infos[] = {
+		{
+			.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+			.stage = shader_stage_create_info,
+			.layout = add_images.pipeline_layout,
+		}
+	};
+
+	VK_CHECK("create add images pipeline", vkCreateComputePipelines(Device_Device(), VK_NULL_HANDLE, _countof(create_infos), create_infos, nullptr, &add_images.pipeline));
+
+	vkDestroyShaderModule(Device_Device(), shader_module, nullptr);
+
+	const VkDescriptorPoolSize pool_sizes[] = {
+		{
+			.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			.descriptorCount = static_cast<uint32_t>(color_targets.size()) + 1 + 1,
+		}
+	};
+
+	const VkDescriptorPoolCreateInfo desc_pool_create_info = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+		.maxSets = 1,
+		.poolSizeCount = _countof(pool_sizes),
+		.pPoolSizes = pool_sizes,
+	};
+	VK_CHECK("create add images desc pool", vkCreateDescriptorPool(Device_Device(), &desc_pool_create_info, nullptr, &add_images.desc_pool));
+
+	const uint32_t desc_counts[] = { 1, 1, static_cast<uint32_t>(color_targets.size()) * 5 };
+
+	const VkDescriptorSetVariableDescriptorCountAllocateInfo var_cnt_desc_set_alloc_info = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
+		.descriptorSetCount = 1,
+		.pDescriptorCounts = desc_counts,
+	};
+
+	const VkDescriptorSetAllocateInfo desc_set_alloc_info = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		.pNext = &var_cnt_desc_set_alloc_info,
+		.descriptorPool = add_images.desc_pool,
+		.descriptorSetCount = 1,
+		.pSetLayouts = &add_images.desc_set_layout,
+	};
+	//VK_CHECK("allocate add images desc set", vkAllocateDescriptorSets(Device_Device(), &desc_set_alloc_info, &add_images.desc_set));
+
+#ifdef _DEBUG
+	Utils_SetObjectName(Device_Device(), VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, reinterpret_cast<uint64_t>(add_images.desc_set_layout), std::string("Add Images") + " desc set layout");
+	Utils_SetObjectName(Device_Device(), VK_OBJECT_TYPE_PIPELINE_LAYOUT, reinterpret_cast<uint64_t>(add_images.pipeline_layout), std::string("Add Images") + " pipeline layout");
+	Utils_SetObjectName(Device_Device(), VK_OBJECT_TYPE_PIPELINE, reinterpret_cast<uint64_t>(add_images.pipeline), std::string("Add Images") + " pipeline");
+	Utils_SetObjectName(Device_Device(), VK_OBJECT_TYPE_DESCRIPTOR_POOL, reinterpret_cast<uint64_t>(add_images.desc_pool), std::string("Add Images") + " desc pool");
+#endif
+
+	VkDeviceSize layout_size = 0;
+	vkGetDescriptorSetLayoutSizeEXT(Device_Device(), add_images.desc_set_layout, &layout_size);
+}
+
+void ComputeTask_AddImages_Destroy()
+{
+	vkDestroyPipelineLayout(Device_Device(), add_images.pipeline_layout, nullptr);
+	vkDestroyDescriptorSetLayout(Device_Device(), add_images.desc_set_layout, nullptr);
+	vkDestroyPipeline(Device_Device(), add_images.pipeline, nullptr);
+	vkDestroyDescriptorPool(Device_Device(), add_images.desc_pool, nullptr);
+}
+
+void ComputeTask_Create(uint32_t max_frames_in_flight, const std::vector<Image>& color_targets, const Image& gui_target)
 {
 	Task_Create(compute_task, Device_Compute_Queue(), PhysicalDeviceData_ComputeQueueFamilyIndex(), max_frames_in_flight, "compute task");
+
+	// Create AddImages
+	ComputeTask_AddImages_Create(color_targets, gui_target);
 }
 
 void ComputeTask_Begin()
 {
 	Task_Start(compute_task);
+}
+
+void ComputeTask_AddImages_Execute(const std::vector<Image>& images)
+{
+	// Bind add images compute pipeline
+	// Bind descriptors
+	// dispatch
 }
 
 void ComputeTask_End()
@@ -470,4 +643,7 @@ void ComputeTask_NextFrame()
 void ComputeTask_Destroy()
 {
 	Task_Destroy(compute_task);
+
+	// Destroy AddImages
+	ComputeTask_AddImages_Destroy();
 }

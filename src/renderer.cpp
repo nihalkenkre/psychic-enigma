@@ -37,10 +37,6 @@ void Renderer_Create(SDL_Window* window)
 	Allocator_Create();
 	GUI_Create(window);
 
-	GraphicsTask_Create(Swapchain_MaxFramesInFlight());
-	ComputeTask_Create(2);
-	TransferTask_Create(2);
-
 	VkExtent2D surface_extent = Surface_Extent();
 	color_target = Image_Create(
 		VK_FORMAT_R32G32B32A32_SFLOAT,
@@ -54,6 +50,10 @@ void Renderer_Create(SDL_Window* window)
 		VK_IMAGE_USAGE_2_COLOR_ATTACHMENT_BIT_KHR | VK_IMAGE_USAGE_2_TRANSFER_SRC_BIT_KHR,
 		"gui target"
 	);
+
+	GraphicsTask_Create(Swapchain_MaxFramesInFlight());
+	ComputeTask_Create(2, {color_target}, gui_target);
+	TransferTask_Create(2);
 }
 
 void Renderer_SetShuttingDown()

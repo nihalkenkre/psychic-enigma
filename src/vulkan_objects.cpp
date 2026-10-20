@@ -300,8 +300,17 @@ void Surface_Destroy()
 	SDL_Vulkan_DestroySurface(instance, surface_data.surface, nullptr);
 }
 
+bool Device_CheckExtensionSupport(const char* ext_name, const std::vector<VkExtensionProperties>& props)
+{
+	auto it = std::find_if(props.begin(), props.end(), [&](const VkExtensionProperties prop)
+		{ return (std::strcmp(prop.extensionName, ext_name) == 0); });
+
+	return it != props.end();
+}
+
 void Device_Create()
 {
+	bool is_descriptor_heap_supported = true;
 	std::vector<const char*> req_ext_names = {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 		VK_EXT_ROBUSTNESS_2_EXTENSION_NAME,
@@ -313,16 +322,7 @@ void Device_Create()
 	std::vector<VkExtensionProperties> props(property_count);
 	VK_CHECK("enumerate device extensions", vkEnumerateDeviceExtensionProperties(physical_device_data.physical_device, nullptr, &property_count, props.data()));
 
-	for (auto const& req_ext_name : req_ext_names)
-	{
-		auto it = std::find_if(props.begin(), props.end(), [&](const VkExtensionProperties prop)
-			{ return (std::strcmp(prop.extensionName, req_ext_name) == 0); });
-
-		if (it == props.end())
-		{
-			printf("Extension %s is not supported by device\n", req_ext_name);
-		}
-	}
+	
 
 	VkDeviceQueueCreateInfo q_ci = {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
@@ -365,8 +365,13 @@ void Device_Create()
 		d_q_ci.pQueuePriorities = priorities[d_q_ci_idx].data();
 	}
 
+	VkPhysicalDeviceDescriptorBufferFeaturesEXT desc_buff_feats = {
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT,
+	};
+
 	VkPhysicalDeviceDynamicRenderingFeatures dyn_rend_feats = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
+		.pNext = &desc_buff_feats,
 	};
 
 	VkPhysicalDeviceSynchronization2Features sync2_feats = {
@@ -629,7 +634,7 @@ Image Image_Create(const VkFormat format, const VkExtent3D& extent, const VkImag
 	Image image = {};
 
 	const VkImageCreateInfo image_create_info = {
-    	.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 	.imageType = VK_IMAGE_TYPE_2D,
 	.format = format,
 	.extent = extent,

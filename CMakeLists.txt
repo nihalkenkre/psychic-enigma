@@ -30,3 +30,4 @@ target_include_directories(${PROJECT_NAME} PRIVATE ../SDL/include ../imgui ../im
 
 target_link_directories(${PROJECT_NAME} PRIVATE $<IF:$<CONFIG:Debug>,${CMAKE_SOURCE_DIR}/../SDL/build/Debug,> $<IF:$<CONFIG:MinSizeRel>,${CMAKE_SOURCE_DIR}/../SDL/build/MinSizeRel,>)
 target_link_libraries(${PROJECT_NAME} PRIVATE SDL3-static winmm imm32 setupapi version)
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD COMMAND python ${CMAKE_SOURCE_DIR}/build_slang.py ${CMAKE_SOURCE_DIR} $<CONFIG> $<TARGET_FILE_DIR:${PROJECT_NAME}>)
