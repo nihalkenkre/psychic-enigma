@@ -30,6 +30,8 @@ static Task compute_task = {};
 static Task transfer_task = {};
 
 static std::vector<Image> _color_targets = {};
+static Image _gui_target = {};
+static Image final_image = {};
 static uint32_t swapchain_image_index = 0;
 
 void Task_Create(Task& task, VkQueue queue, const uint32_t queue_family_index, const uint32_t max_frames_in_flight, const std::string& name)
@@ -192,8 +194,9 @@ void Task_Destroy(Task task)
 	}
 }
 
-void GraphicsTask_Create(uint32_t max_frames_in_flight)
+void GraphicsTask_Create(uint32_t max_frames_in_flight, const VkExtent3D& extent)
 {
+	final_image = Allocator_CreateImage(VK_FORMAT_R32G32B32A32_SFLOAT, extent, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, "final image");
 	Task_Create(graphics_task, Device_Graphics_Queue(), PhysicalDeviceData_GraphicsQueueFamilyIndex(), max_frames_in_flight, "graphics task");
 }
 
@@ -245,7 +248,7 @@ void GraphicsTask_BeginRenderPass(const std::vector<Image>& color_targets, const
 		GraphicsTask_ChangeImageLayout(
 			color_target.image,
 			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			VK_PIPELINE_STAGE_2_BLIT_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+			VK_PIPELINE_STAGE_2_BLIT_BIT | VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
 			VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT
 		);
 	}
@@ -264,7 +267,7 @@ void GraphicsTask_BeginRenderPass(const std::vector<Image>& color_targets, const
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 			.imageView = color_target.image_view,
 			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+			.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 			.clearValue = clear_value,
 			});
@@ -283,14 +286,44 @@ void GraphicsTask_BeginRenderPass(const std::vector<Image>& color_targets, const
 	vkCmdBeginRendering(Task_CommandBuffer(graphics_task), &rendering_info);
 }
 
+void GraphicsTask_BeginGUIRenderPass(const Image& gui_target, const VkRect2D render_area)
+{
+	GraphicsTask_ChangeImageLayout(
+		gui_target.image,
+		VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		VK_PIPELINE_STAGE_2_BLIT_BIT | VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+		VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT
+	);
+
+	const VkRenderingAttachmentInfo color_attachment = {
+		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+		.imageView = gui_target.image_view,
+		.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+	};
+
+	const VkRenderingInfo rendering_info = {
+		.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+		.renderArea = render_area,
+		.layerCount = 1,
+		.colorAttachmentCount = 1,
+		.pColorAttachments = &color_attachment,
+	};
+
+	_gui_target = gui_target;
+
+	vkCmdBeginRendering(Task_CommandBuffer(graphics_task), &rendering_info);
+}
+
 void GraphicsTask_RenderGUI()
 {
 	GUI_Render(Task_CommandBuffer(graphics_task));
 }
 
-void GraphicsTask_Render()
+void GraphicsTask_EndGUIRenderPass()
 {
-
+	vkCmdEndRendering(Task_CommandBuffer(graphics_task));
 }
 
 void GraphicsTask_EndRenderPass()
@@ -309,6 +342,13 @@ void GraphicsTask_End()
 			VK_PIPELINE_STAGE_2_TRANSFER_BIT_KHR, VK_ACCESS_2_TRANSFER_READ_BIT
 		);
 	}
+
+	GraphicsTask_ChangeImageLayout(
+		_gui_target.image,
+		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+		VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+		VK_PIPELINE_STAGE_2_TRANSFER_BIT_KHR, VK_ACCESS_2_TRANSFER_READ_BIT
+	);
 
 	const VkAcquireNextImageInfoKHR acq_info = {
 		.sType = VK_STRUCTURE_TYPE_ACQUIRE_NEXT_IMAGE_INFO_KHR,
@@ -347,7 +387,7 @@ void GraphicsTask_End()
 
 	const VkBlitImageInfo2 blit_info = {
 		.sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
-		.srcImage = _color_targets.at(0).image,
+		.srcImage = final_image.image,
 		.srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 		.dstImage = swapchain_image,
 		.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -409,6 +449,7 @@ void GraphicsTask_NextFrame()
 
 void GraphicsTask_Destroy()
 {
+	Allocator_DestroyImage(final_image);
 	Task_Destroy(graphics_task);
 }
 

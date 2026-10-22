@@ -19,10 +19,12 @@ static SDL_Mutex* compute_mut;
 static SDL_Thread* transfer_th;
 static SDL_Mutex* transfer_mut;
 
-Renderer renderer = {};
+static Renderer renderer = {};
 
-Image color_target = {};
-Image gui_target = {};
+static Image color_target = {};
+static Image gui_target = {};
+static VkExtent2D surface_extent = {};
+
 
 void Renderer_Create(SDL_Window* window)
 {
@@ -37,18 +39,19 @@ void Renderer_Create(SDL_Window* window)
 	Allocator_Create();
 	GUI_Create(window);
 
-	GraphicsTask_Create(Swapchain_MaxFramesInFlight());
+	surface_extent = Surface_Extent();
+
+	GraphicsTask_Create(Swapchain_MaxFramesInFlight(), VkExtent3D{ .width = surface_extent.width, .height = surface_extent.height, .depth = 1 });
 	ComputeTask_Create(2);
 	TransferTask_Create(2);
 
-	VkExtent2D surface_extent = Surface_Extent();
-	color_target = Image_Create(
+	color_target = Allocator_CreateImage(
 		VK_FORMAT_R32G32B32A32_SFLOAT,
 		VkExtent3D{ .width = surface_extent.width, .height = surface_extent.height, .depth = 1 },
 		VK_IMAGE_USAGE_2_COLOR_ATTACHMENT_BIT_KHR | VK_IMAGE_USAGE_2_TRANSFER_SRC_BIT_KHR,
 		"color target"
 	);
-	gui_target = Image_Create(
+	gui_target = Allocator_CreateImage(
 		VK_FORMAT_R32G32B32A32_SFLOAT,
 		VkExtent3D{ .width = surface_extent.width, .height = surface_extent.height, .depth = 1 },
 		VK_IMAGE_USAGE_2_COLOR_ATTACHMENT_BIT_KHR | VK_IMAGE_USAGE_2_TRANSFER_SRC_BIT_KHR,
@@ -68,8 +71,10 @@ static int GraphicsThread(void* ptr)
 	{
 		GraphicsTask_Begin();
 		GraphicsTask_BeginRenderPass({ color_target }, VkRect2D{ .extent = Surface_Extent() });
-		GraphicsTask_RenderGUI();
 		GraphicsTask_EndRenderPass();
+		GraphicsTask_BeginGUIRenderPass({ gui_target }, VkRect2D{ .extent = Surface_Extent() });
+		GraphicsTask_RenderGUI();
+		GraphicsTask_EndGUIRenderPass();
 		GraphicsTask_End();
 
 		SDL_LockMutex(graphics_mut);
@@ -151,8 +156,8 @@ void Renderer_Destroy()
 
 	VK_CHECK("wait device", vkDeviceWaitIdle(Device_Device()));
 
-	Image_Destroy(gui_target);
-	Image_Destroy(color_target);
+	Allocator_DestroyImage(gui_target);
+	Allocator_DestroyImage(color_target);
 	TransferTask_Destroy();
 	ComputeTask_Destroy();
 	GraphicsTask_Destroy();

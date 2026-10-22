@@ -617,29 +617,24 @@ void Allocator_Create()
 	VK_CHECK("create allocator", vmaCreateAllocator(&allocator_create_info, &allocator));
 }
 
-void Allocator_Destroy()
-{
-	vmaDestroyAllocator(allocator);
-}
-
-Image Image_Create(const VkFormat format, const VkExtent3D& extent, const VkImageUsageFlags usage, const std::string& name)
+Image Allocator_CreateImage(const VkFormat format, const VkExtent3D& extent, const VkImageUsageFlags usage, const std::string& name)
 {
 	const uint32_t queue_family_indices[] = { physical_device_data.graphics_queue_family_index, physical_device_data.compute_queue_family_index, physical_device_data.transfer_queue_family_index };
 
 	Image image = {};
 
 	const VkImageCreateInfo image_create_info = {
-    	.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-	.imageType = VK_IMAGE_TYPE_2D,
-	.format = format,
-	.extent = extent,
-	.mipLevels = 1,
-	.arrayLayers = 1,
-	.samples = VK_SAMPLE_COUNT_1_BIT,
-	.tiling = VK_IMAGE_TILING_OPTIMAL,
-	.usage = usage,
-	.queueFamilyIndexCount = _countof(queue_family_indices),
-	.pQueueFamilyIndices = queue_family_indices,
+		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		.imageType = VK_IMAGE_TYPE_2D,
+		.format = format,
+		.extent = extent,
+		.mipLevels = 1,
+		.arrayLayers = 1,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.tiling = VK_IMAGE_TILING_OPTIMAL,
+		.usage = usage,
+		.queueFamilyIndexCount = _countof(queue_family_indices),
+		.pQueueFamilyIndices = queue_family_indices,
 	};
 	const VmaAllocationCreateInfo allocation_create_info = { .usage = VMA_MEMORY_USAGE_AUTO };
 
@@ -674,7 +669,7 @@ Image Image_Create(const VkFormat format, const VkExtent3D& extent, const VkImag
 	return image;
 }
 
-void Image_Destroy(Image image)
+void Allocator_DestroyImage(Image image)
 {
 	if (device != VK_NULL_HANDLE)
 	{
@@ -694,3 +689,36 @@ void Image_Destroy(Image image)
 		}
 	}
 }
+
+Buffer Allocator_CreateBuffer(const VkDeviceSize size, const VkBufferUsageFlags usage)
+{
+	Buffer buffer = {};
+
+	const VkBufferCreateInfo buffer_create_info = {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		.size = size,
+		.usage = usage,
+	};
+
+	const VmaAllocationCreateInfo allocation_create_info = {
+		.usage = VMA_MEMORY_USAGE_AUTO,
+	};
+
+	VK_CHECK("create buffer", vmaCreateBuffer(allocator, &buffer_create_info, &allocation_create_info, &buffer.buffer, &buffer.allocation, &buffer.allocation_info.allocationInfo));
+
+	return buffer;
+}
+
+void Allocator_DestroyBuffer(Buffer buffer)
+{
+	if (device != VK_NULL_HANDLE)
+	{
+		vmaDestroyBuffer(allocator, buffer.buffer, buffer.allocation);
+	}
+}
+
+void Allocator_Destroy()
+{
+	vmaDestroyAllocator(allocator);
+}
+

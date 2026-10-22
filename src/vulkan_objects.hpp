@@ -17,6 +17,12 @@ struct Image {
 	VmaAllocationInfo2 allocation_info;
 };
 
+struct Buffer {
+	VkBuffer buffer;
+	VmaAllocation allocation;
+	VmaAllocationInfo2 allocation_info;
+};
+
 void Instance_Create();
 VkInstance Instance_Instance();
 void Instance_GetPhysicalDeviceData();
@@ -51,8 +57,9 @@ void Swapchain_NextFrame();
 void Swapchain_Destroy();
 
 void Allocator_Create();
+Image Allocator_CreateImage(const VkFormat format, const VkExtent3D& extent, const VkImageUsageFlags usage, const std::string& name);
+void Allocator_DestroyImage(Image image);
+
+Buffer Allocator_CreateBuffer(const VkDeviceSize size, const VkBufferUsageFlags usage);
+void Allocator_DestroyBuffer(Buffer buffer);
 void Allocator_Destroy();
-
-
-Image Image_Create(const VkFormat format, const VkExtent3D& extent, const VkImageUsageFlags usage, const std::string& name);
-void Image_Destroy(Image image);
