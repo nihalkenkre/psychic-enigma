@@ -8,14 +8,21 @@
 
 struct SDL_Window;
 
-struct Image {
+typedef struct Image {
 	VkImage image;
 	VkImageView image_view;
 	VkSampler sampler;
 	VkExtent3D extent;
 	VmaAllocation allocation;
 	VmaAllocationInfo2 allocation_info;
-};
+} Image;
+
+typedef struct Buffer
+{
+	VkBuffer buffer;
+	VmaAllocation allocation;
+	VmaAllocationInfo2 allocation_info;
+} Buffer;
 
 void Instance_Create();
 VkInstance Instance_Instance();
@@ -26,6 +33,7 @@ VkPhysicalDevice PhysicalDeviceData_PhysicalDevice();
 uint32_t PhysicalDeviceData_GraphicsQueueFamilyIndex();
 uint32_t PhysicalDeviceData_ComputeQueueFamilyIndex();
 uint32_t PhysicalDeviceData_TransferQueueFamilyIndex();
+VkPhysicalDeviceDescriptorBufferPropertiesEXT PhysicalDeviceData_DescBuffProps();
 
 void Surface_Create(SDL_Window* window);
 void Surface_PopulateData();
@@ -51,8 +59,10 @@ void Swapchain_NextFrame();
 void Swapchain_Destroy();
 
 void Allocator_Create();
+Image Allocator_CreateImage(const VkFormat format, const VkExtent3D& extent, const VkImageUsageFlags usage, const std::string& name);
+void Allocator_DestroyImage(Image image);
+
+Buffer Allocator_CreateBuffer(const VkDeviceSize size, const VkBufferUsageFlags usage);
+void Allocator_DestroyBuffer(Buffer buffer);
+
 void Allocator_Destroy();
-
-
-Image Image_Create(const VkFormat format, const VkExtent3D& extent, const VkImageUsageFlags usage, const std::string& name);
-void Image_Destroy(Image image);

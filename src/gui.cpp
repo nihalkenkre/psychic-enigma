@@ -31,7 +31,7 @@ void GUI_Create(SDL_Window* window)
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 		.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
 		.maxSets = 1000,
-		.poolSizeCount = std::size(pool_sizes),
+		.poolSizeCount = static_cast<uint32_t>(std::size(pool_sizes)),
 		.pPoolSizes = pool_sizes,
 	};
 

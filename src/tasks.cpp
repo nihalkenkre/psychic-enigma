@@ -5,6 +5,7 @@
 
 #include <volk.h>
 #include <vector>
+#include <vk_mem_alloc.h>
 
 struct Task {
 	VkCommandPool command_pool;
@@ -37,14 +38,27 @@ struct AddImages {
 	VkDescriptorSetLayout desc_set_layout;
 
 	// Heap
-	VkBuffer desc_heap;
+	struct DescHeap {
+		Buffer buffer;
+	};
 
 	// Buffer
-	VkBuffer desc_buffer;
+	struct DescBuffer {
+		Buffer buffer;
+		VkDeviceSize desc_set_layout_size;
+	};
 
 	// Indexing
-	VkDescriptorPool desc_pool;
-	VkDescriptorSet desc_set;
+	struct DescIndexing {
+		VkDescriptorPool desc_pool;
+		VkDescriptorSet desc_set;
+	};
+
+	union {
+		DescHeap desc_heap;
+		DescBuffer desc_buffer;
+		DescIndexing desc_indexing;
+	};
 };
 
 static Task graphics_task = {};
@@ -523,12 +537,17 @@ void ComputeTask_AddImages_Create(const std::vector<Image>& color_targets, const
 		.pBindingFlags = binding_flags
 	};
 
-	const VkDescriptorSetLayoutCreateInfo dsl_create_info = {
+	VkDescriptorSetLayoutCreateInfo dsl_create_info = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.pNext = &binding_flags_ci,
 		.bindingCount = _countof(dsl_set_0_bindings),
 		.pBindings = dsl_set_0_bindings,
 	};
+
+	if (descriptor_mode == EDescriptorMode::Desc_Buffer)
+	{
+		dsl_create_info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+	}
 
 	VK_CHECK("create add images dsl", vkCreateDescriptorSetLayout(Device_Device(), &dsl_create_info, nullptr, &add_images.desc_set_layout));
 
@@ -547,7 +566,7 @@ void ComputeTask_AddImages_Create(const std::vector<Image>& color_targets, const
 		.pPushConstantRanges = pc_rngs,
 	};
 
-	VK_CHECK("create add images layout", vkCreatePipelineLayout(Device_Device(), &pipeline_layout_create_info, nullptr, &add_images.pipeline_layout));
+	VK_CHECK("create add images pipeline layout", vkCreatePipelineLayout(Device_Device(), &pipeline_layout_create_info, nullptr, &add_images.pipeline_layout));
 
 	const VkComputePipelineCreateInfo create_infos[] = {
 		{
@@ -561,17 +580,59 @@ void ComputeTask_AddImages_Create(const std::vector<Image>& color_targets, const
 
 	vkDestroyShaderModule(Device_Device(), shader_module, nullptr);
 
-	if (descriptor_mode == EDescriptorMode::Heap)
+	if (descriptor_mode == EDescriptorMode::Desc_Heap)
 	{
 
 	}
-	else if (descriptor_mode == EDescriptorMode::Buffer)
+	else if (descriptor_mode == EDescriptorMode::Desc_Buffer)
 	{
+		VkPhysicalDeviceDescriptorBufferPropertiesEXT desc_buff_props = PhysicalDeviceData_DescBuffProps();
+		vkGetDescriptorSetLayoutSizeEXT(Device_Device(), add_images.desc_set_layout, &add_images.desc_buffer.desc_set_layout_size);
+		add_images.desc_buffer.buffer = Allocator_CreateBuffer(ALIGNED_SIZE(add_images.desc_buffer.desc_set_layout_size, desc_buff_props.descriptorBufferOffsetAlignment), VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
 
+		VkDeviceSize buff_offset = 0;
+		size_t i = 0;
+		for (const auto& color_target : color_targets)
+		{
+			const VkDescriptorImageInfo image_info = {
+				.sampler = color_target.sampler,
+				.imageView = color_target.image_view,
+				.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			};
+
+			const VkDescriptorGetInfoEXT desc_get_info = {
+				.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
+				.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+				.data {
+					.pStorageImage = &image_info,
+				}
+			};
+
+			vkGetDescriptorEXT(Device_Device(), &desc_get_info, desc_buff_props.storageImageDescriptorSize, reinterpret_cast<void*>(reinterpret_cast<VkDeviceSize>(add_images.desc_buffer.buffer.allocation->GetMappedData()) + buff_offset));
+			buff_offset = (desc_buff_props.storageImageDescriptorSize * i);
+			++i;
+		}
+
+		const VkDescriptorImageInfo image_info = {
+			.sampler = gui_target.sampler,
+			.imageView = gui_target.image_view,
+			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		};
+
+		const VkDescriptorGetInfoEXT desc_get_info = {
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
+			.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			.data {
+				.pStorageImage = &image_info,
+			}
+		};
+
+		//vkGetDescriptorEXT(Device_Device(), &desc_get_info, desc_buff_props.storageImageDescriptorSize, reinterpret_cast<void*>(reinterpret_cast<VkDeviceSize>(add_images.desc_buffer.buffer.allocation->GetMappedData()) + buff_offset));
+		buff_offset = (desc_buff_props.storageImageDescriptorSize + i);
+		++i;
 	}
-	else if (descriptor_mode == EDescriptorMode::Index)
+	else if (descriptor_mode == EDescriptorMode::Desc_Index)
 	{
-
 		const VkDescriptorPoolSize pool_sizes[] = {
 			{
 				.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
@@ -585,7 +646,7 @@ void ComputeTask_AddImages_Create(const std::vector<Image>& color_targets, const
 			.poolSizeCount = _countof(pool_sizes),
 			.pPoolSizes = pool_sizes,
 		};
-		VK_CHECK("create add images desc pool", vkCreateDescriptorPool(Device_Device(), &desc_pool_create_info, nullptr, &add_images.desc_pool));
+		VK_CHECK("create add images desc pool", vkCreateDescriptorPool(Device_Device(), &desc_pool_create_info, nullptr, &add_images.desc_indexing.desc_pool));
 
 		const uint32_t desc_counts[] = { 1, 1, static_cast<uint32_t>(color_targets.size()) * 5 };
 
@@ -598,18 +659,22 @@ void ComputeTask_AddImages_Create(const std::vector<Image>& color_targets, const
 		const VkDescriptorSetAllocateInfo desc_set_alloc_info = {
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 			.pNext = &var_cnt_desc_set_alloc_info,
-			.descriptorPool = add_images.desc_pool,
+			.descriptorPool = add_images.desc_indexing.desc_pool,
 			.descriptorSetCount = 1,
 			.pSetLayouts = &add_images.desc_set_layout,
 		};
-		VK_CHECK("allocate add images desc set", vkAllocateDescriptorSets(Device_Device(), &desc_set_alloc_info, &add_images.desc_set));
+		VK_CHECK("allocate add images desc set", vkAllocateDescriptorSets(Device_Device(), &desc_set_alloc_info, &add_images.desc_indexing.desc_set));
+
+#ifdef _DEBUG
+		Utils_SetObjectName(Device_Device(), VK_OBJECT_TYPE_DESCRIPTOR_SET, reinterpret_cast<uint64_t>(add_images.desc_indexing.desc_set), std::string("AddImages") + " desc set");
+		Utils_SetObjectName(Device_Device(), VK_OBJECT_TYPE_DESCRIPTOR_POOL, reinterpret_cast<uint64_t>(add_images.desc_indexing.desc_pool), std::string("AddImages") + " desc pool");
+#endif
 	}
 
 #ifdef _DEBUG
-	Utils_SetObjectName(Device_Device(), VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, reinterpret_cast<uint64_t>(add_images.desc_set_layout), std::string("Add Images") + " desc set layout");
-	Utils_SetObjectName(Device_Device(), VK_OBJECT_TYPE_PIPELINE_LAYOUT, reinterpret_cast<uint64_t>(add_images.pipeline_layout), std::string("Add Images") + " pipeline layout");
-	Utils_SetObjectName(Device_Device(), VK_OBJECT_TYPE_PIPELINE, reinterpret_cast<uint64_t>(add_images.pipeline), std::string("Add Images") + " pipeline");
-	Utils_SetObjectName(Device_Device(), VK_OBJECT_TYPE_DESCRIPTOR_POOL, reinterpret_cast<uint64_t>(add_images.desc_pool), std::string("Add Images") + " desc pool");
+	Utils_SetObjectName(Device_Device(), VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, reinterpret_cast<uint64_t>(add_images.desc_set_layout), std::string("AddImages") + " desc set layout");
+	Utils_SetObjectName(Device_Device(), VK_OBJECT_TYPE_PIPELINE_LAYOUT, reinterpret_cast<uint64_t>(add_images.pipeline_layout), std::string("AddImages") + " pipeline layout");
+	Utils_SetObjectName(Device_Device(), VK_OBJECT_TYPE_PIPELINE, reinterpret_cast<uint64_t>(add_images.pipeline), std::string("AddImages") + " pipeline");
 #endif
 }
 
@@ -618,7 +683,19 @@ void ComputeTask_AddImages_Destroy()
 	vkDestroyPipelineLayout(Device_Device(), add_images.pipeline_layout, nullptr);
 	vkDestroyDescriptorSetLayout(Device_Device(), add_images.desc_set_layout, nullptr);
 	vkDestroyPipeline(Device_Device(), add_images.pipeline, nullptr);
-	vkDestroyDescriptorPool(Device_Device(), add_images.desc_pool, nullptr);
+
+	if (descriptor_mode == EDescriptorMode::Desc_Heap)
+	{
+		Allocator_DestroyBuffer(add_images.desc_heap.buffer);
+	}
+	else if (descriptor_mode == EDescriptorMode::Desc_Buffer)
+	{
+		Allocator_DestroyBuffer(add_images.desc_buffer.buffer);
+	}
+	else if (descriptor_mode == EDescriptorMode::Desc_Index)
+	{
+		vkDestroyDescriptorPool(Device_Device(), add_images.desc_indexing.desc_pool, nullptr);
+	}
 }
 
 void ComputeTask_Create(uint32_t max_frames_in_flight, const std::vector<Image>& color_targets, const Image& gui_target)

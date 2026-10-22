@@ -9,6 +9,7 @@ struct PhysicalDeviceData {
 	VkPhysicalDevice physical_device;
 	VkPhysicalDeviceProperties2KHR properties;
 	VkPhysicalDeviceMemoryProperties2KHR memory_properties;
+	VkPhysicalDeviceDescriptorBufferPropertiesEXT desc_buff_properties;
 	uint32_t graphics_queue_family_index;
 	uint32_t compute_queue_family_index;
 	uint32_t transfer_queue_family_index;
@@ -34,13 +35,14 @@ struct SwapchainData {
 	uint32_t current_frame_in_flight;
 };
 
-EDescriptorMode descriptor_mode = EDescriptorMode::Index;
+EDescriptorMode descriptor_mode = EDescriptorMode::Desc_Index;
 
 static VkInstance instance = VK_NULL_HANDLE;
 static uint32_t vk_api_version = 0;
 static PhysicalDeviceData physical_device_data = {
 .properties = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,},
-.memory_properties = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2,}
+.memory_properties = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2,},
+.desc_buff_properties = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT, },
 };
 static SurfaceeData surface_data = {
 .capabilities = {
@@ -240,6 +242,11 @@ uint32_t PhysicalDeviceData_TransferQueueFamilyIndex()
 	return physical_device_data.transfer_queue_family_index;
 }
 
+VkPhysicalDeviceDescriptorBufferPropertiesEXT PhysicalDeviceData_DescBuffProps()
+{
+	return physical_device_data.desc_buff_properties;
+}
+
 void Surface_Create(SDL_Window* window)
 {
 	SDL_CHECK(SDL_Vulkan_CreateSurface(window, instance, nullptr, &surface_data.surface));
@@ -327,12 +334,19 @@ void Device_Create()
 		req_ext_names.push_back(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME);
 		req_ext_names.push_back("VK_KHR_maintenance5");
 
-		descriptor_mode = EDescriptorMode::Heap;
+		descriptor_mode = EDescriptorMode::Desc_Heap;
 	}
 	else if (Device_CheckExtensionSupport(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME, props)) {
 		req_ext_names.push_back(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME);
-		descriptor_mode = EDescriptorMode::Buffer;
+		descriptor_mode = EDescriptorMode::Desc_Buffer;
 	}
+	
+	if (descriptor_mode == EDescriptorMode::Desc_Buffer)
+	{
+		physical_device_data.properties.pNext = &physical_device_data.desc_buff_properties;
+	}
+
+	vkGetPhysicalDeviceProperties2(physical_device_data.physical_device, &physical_device_data.properties);
 
 	VkDeviceQueueCreateInfo q_ci = {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
@@ -387,11 +401,11 @@ void Device_Create()
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
 	};
 
-	if (descriptor_mode == EDescriptorMode::Heap)
+	if (descriptor_mode == EDescriptorMode::Desc_Heap)
 	{
 		dyn_rend_feats.pNext = &desc_heap_feats;
-	} 
-	else if (descriptor_mode == EDescriptorMode::Buffer)
+	}
+	else if (descriptor_mode == EDescriptorMode::Desc_Buffer)
 	{
 		dyn_rend_feats.pNext = &desc_buff_feats;
 	}
@@ -644,12 +658,7 @@ void Allocator_Create()
 	VK_CHECK("create allocator", vmaCreateAllocator(&allocator_create_info, &allocator));
 }
 
-void Allocator_Destroy()
-{
-	vmaDestroyAllocator(allocator);
-}
-
-Image Image_Create(const VkFormat format, const VkExtent3D& extent, const VkImageUsageFlags usage, const std::string& name)
+Image Allocator_CreateImage(const VkFormat format, const VkExtent3D& extent, const VkImageUsageFlags usage, const std::string& name)
 {
 	const uint32_t queue_family_indices[] = { physical_device_data.graphics_queue_family_index, physical_device_data.compute_queue_family_index, physical_device_data.transfer_queue_family_index };
 
@@ -657,16 +666,16 @@ Image Image_Create(const VkFormat format, const VkExtent3D& extent, const VkImag
 
 	const VkImageCreateInfo image_create_info = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-	.imageType = VK_IMAGE_TYPE_2D,
-	.format = format,
-	.extent = extent,
-	.mipLevels = 1,
-	.arrayLayers = 1,
-	.samples = VK_SAMPLE_COUNT_1_BIT,
-	.tiling = VK_IMAGE_TILING_OPTIMAL,
-	.usage = usage,
-	.queueFamilyIndexCount = _countof(queue_family_indices),
-	.pQueueFamilyIndices = queue_family_indices,
+	    .imageType = VK_IMAGE_TYPE_2D,
+	    .format = format,
+	    .extent = extent,
+	    .mipLevels = 1,
+	    .arrayLayers = 1,
+	    .samples = VK_SAMPLE_COUNT_1_BIT,
+	    .tiling = VK_IMAGE_TILING_OPTIMAL,
+	    .usage = usage,
+	    .queueFamilyIndexCount = _countof(queue_family_indices),
+	    .pQueueFamilyIndices = queue_family_indices,
 	};
 	const VmaAllocationCreateInfo allocation_create_info = { .usage = VMA_MEMORY_USAGE_AUTO };
 
@@ -701,7 +710,7 @@ Image Image_Create(const VkFormat format, const VkExtent3D& extent, const VkImag
 	return image;
 }
 
-void Image_Destroy(Image image)
+void Allocator_DestroyImage(Image image)
 {
 	if (device != VK_NULL_HANDLE)
 	{
@@ -720,4 +729,36 @@ void Image_Destroy(Image image)
 			vmaDestroyImage(allocator, image.image, image.allocation);
 		}
 	}
+}
+
+Buffer Allocator_CreateBuffer(const VkDeviceSize size, const VkBufferUsageFlags usage)
+{
+	Buffer buffer = {};
+
+	const VkBufferCreateInfo buffer_create_info = {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		.size = size,
+		.usage = usage,
+	};
+
+	const VmaAllocationCreateInfo allocation_create_info = {
+		.usage = VMA_MEMORY_USAGE_AUTO,
+	};
+
+	VK_CHECK("create buffer", vmaCreateBuffer(allocator, &buffer_create_info, &allocation_create_info, &buffer.buffer, &buffer.allocation, &buffer.allocation_info.allocationInfo));
+
+	return buffer;
+}
+
+void Allocator_DestroyBuffer(Buffer buffer)
+{
+	if (device != VK_NULL_HANDLE)
+	{
+		vmaDestroyBuffer(allocator, buffer.buffer, buffer.allocation);
+	}
+}
+
+void Allocator_Destroy()
+{
+	vmaDestroyAllocator(allocator);
 }
