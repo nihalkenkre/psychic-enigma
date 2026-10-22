@@ -31,7 +31,6 @@ static Task transfer_task = {};
 
 static std::vector<Image> _color_targets = {};
 static Image _gui_target = {};
-static Image final_image = {};
 static uint32_t swapchain_image_index = 0;
 
 void Task_Create(Task& task, VkQueue queue, const uint32_t queue_family_index, const uint32_t max_frames_in_flight, const std::string& name)
@@ -196,7 +195,6 @@ void Task_Destroy(Task task)
 
 void GraphicsTask_Create(uint32_t max_frames_in_flight, const VkExtent3D& extent)
 {
-	final_image = Allocator_CreateImage(VK_FORMAT_R32G32B32A32_SFLOAT, extent, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, "final image");
 	Task_Create(graphics_task, Device_Graphics_Queue(), PhysicalDeviceData_GraphicsQueueFamilyIndex(), max_frames_in_flight, "graphics task");
 }
 
@@ -387,7 +385,7 @@ void GraphicsTask_End()
 
 	const VkBlitImageInfo2 blit_info = {
 		.sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
-		.srcImage = final_image.image,
+		.srcImage = _gui_target.image,
 		.srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 		.dstImage = swapchain_image,
 		.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -449,7 +447,6 @@ void GraphicsTask_NextFrame()
 
 void GraphicsTask_Destroy()
 {
-	Allocator_DestroyImage(final_image);
 	Task_Destroy(graphics_task);
 }
 

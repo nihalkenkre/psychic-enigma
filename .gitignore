@@ -69,3 +69,6 @@ Testing/
 
 # Visual Studio
 .vs
+
+# SPIRV
+*.spv

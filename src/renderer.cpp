@@ -23,6 +23,7 @@ static Renderer renderer = {};
 
 static Image color_target = {};
 static Image gui_target = {};
+static Image final_image = {};
 static VkExtent2D surface_extent = {};
 
 
@@ -57,6 +58,13 @@ void Renderer_Create(SDL_Window* window)
 		VK_IMAGE_USAGE_2_COLOR_ATTACHMENT_BIT_KHR | VK_IMAGE_USAGE_2_TRANSFER_SRC_BIT_KHR,
 		"gui target"
 	);
+
+	final_image = Allocator_CreateImage(
+		VK_FORMAT_R32G32B32A32_SFLOAT,
+		VkExtent3D{ .width = surface_extent.width, .height = surface_extent.height, .depth = 1 },
+		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+		"final image"
+	);
 }
 
 void Renderer_SetShuttingDown()
@@ -72,7 +80,7 @@ static int GraphicsThread(void* ptr)
 		GraphicsTask_Begin();
 		GraphicsTask_BeginRenderPass({ color_target }, VkRect2D{ .extent = Surface_Extent() });
 		GraphicsTask_EndRenderPass();
-		GraphicsTask_BeginGUIRenderPass({ gui_target }, VkRect2D{ .extent = Surface_Extent() });
+		GraphicsTask_BeginGUIRenderPass(gui_target, VkRect2D{ .extent = Surface_Extent() });
 		GraphicsTask_RenderGUI();
 		GraphicsTask_EndGUIRenderPass();
 		GraphicsTask_End();
@@ -156,6 +164,7 @@ void Renderer_Destroy()
 
 	VK_CHECK("wait device", vkDeviceWaitIdle(Device_Device()));
 
+	Allocator_DestroyImage(final_image);
 	Allocator_DestroyImage(gui_target);
 	Allocator_DestroyImage(color_target);
 	TransferTask_Destroy();
