@@ -32,6 +32,8 @@ VkPhysicalDevice PhysicalDeviceData_PhysicalDevice();
 uint32_t PhysicalDeviceData_GraphicsQueueFamilyIndex();
 uint32_t PhysicalDeviceData_ComputeQueueFamilyIndex();
 uint32_t PhysicalDeviceData_TransferQueueFamilyIndex();
+VkPhysicalDeviceDescriptorHeapPropertiesEXT PhysicalDeviceData_DescHeapProps();
+VkPhysicalDeviceDescriptorBufferPropertiesEXT PhysicalDeviceData_DescBufferProps();
 
 void Surface_Create(SDL_Window* window);
 void Surface_PopulateData();
@@ -60,6 +62,6 @@ void Allocator_Create();
 Image Allocator_CreateImage(const VkFormat format, const VkExtent3D& extent, const VkImageUsageFlags usage, const std::string& name);
 void Allocator_DestroyImage(Image image);
 
-Buffer Allocator_CreateBuffer(const VkDeviceSize size, const VkBufferUsageFlags usage);
+Buffer Allocator_CreateBuffer(const VkDeviceSize size, const VkBufferUsageFlags usage, const std::string& name);
 void Allocator_DestroyBuffer(Buffer buffer);
 void Allocator_Destroy();

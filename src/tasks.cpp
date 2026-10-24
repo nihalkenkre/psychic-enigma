@@ -25,6 +25,43 @@ enum ETaskType {
 	Compute,
 };
 
+struct AddImages {
+	struct PushConstantRange {
+		uint32_t image_width;
+		uint32_t image_height;
+		uint32_t image_count;
+	};
+
+	VkPipeline pipeline;
+
+	// Heap
+	struct DescHeap {
+		Buffer buffer;
+	};
+
+	// Buffer
+	//struct DescBuffer {
+	//	Buffer buffer;
+	//	VkPipelineLayout pipeline_layout;
+	//	VkDescriptorSetLayout desc_set_layout;
+	//	VkDeviceSize desc_set_layout_size;
+	//};
+
+	//// Indexing
+	//struct DescIndexing {
+	//	VkDescriptorPool desc_pool;
+	//	VkDescriptorSet desc_set;
+	//	VkPipelineLayout pipeline_layout;
+	//	VkDescriptorSetLayout desc_set_layout;
+	//};
+
+	union {
+		DescHeap desc_heap;
+		//DescBuffer desc_buffer;
+		//DescIndexing desc_indexing;
+	};
+};
+
 static Task graphics_task = {};
 static Task compute_task = {};
 static Task transfer_task = {};
@@ -32,6 +69,8 @@ static Task transfer_task = {};
 static std::vector<Image> _color_targets = {};
 static Image _gui_target = {};
 static uint32_t swapchain_image_index = 0;
+
+static AddImages add_images = {};
 
 void Task_Create(Task& task, VkQueue queue, const uint32_t queue_family_index, const uint32_t max_frames_in_flight, const std::string& name)
 {
@@ -245,7 +284,7 @@ void GraphicsTask_BeginRenderPass(const std::vector<Image>& color_targets, const
 	{
 		GraphicsTask_ChangeImageLayout(
 			color_target.image,
-			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
 			VK_PIPELINE_STAGE_2_BLIT_BIT | VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
 			VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT
 		);
@@ -264,7 +303,7 @@ void GraphicsTask_BeginRenderPass(const std::vector<Image>& color_targets, const
 		color_attachments.push_back({
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 			.imageView = color_target.image_view,
-			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
 			.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 			.clearValue = clear_value,
@@ -288,7 +327,7 @@ void GraphicsTask_BeginGUIRenderPass(const Image& gui_target, const VkRect2D ren
 {
 	GraphicsTask_ChangeImageLayout(
 		gui_target.image,
-		VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
 		VK_PIPELINE_STAGE_2_BLIT_BIT | VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
 		VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT
 	);
@@ -296,7 +335,7 @@ void GraphicsTask_BeginGUIRenderPass(const Image& gui_target, const VkRect2D ren
 	const VkRenderingAttachmentInfo color_attachment = {
 		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 		.imageView = gui_target.image_view,
-		.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
 		.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 	};
@@ -335,7 +374,7 @@ void GraphicsTask_End()
 	{
 		GraphicsTask_ChangeImageLayout(
 			color_target.image,
-			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+			VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 			VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
 			VK_PIPELINE_STAGE_2_TRANSFER_BIT_KHR, VK_ACCESS_2_TRANSFER_READ_BIT
 		);
@@ -343,7 +382,7 @@ void GraphicsTask_End()
 
 	GraphicsTask_ChangeImageLayout(
 		_gui_target.image,
-		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+		VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 		VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
 		VK_PIPELINE_STAGE_2_TRANSFER_BIT_KHR, VK_ACCESS_2_TRANSFER_READ_BIT
 	);
@@ -480,9 +519,129 @@ void TransferTask_Destroy()
 	Task_Destroy(transfer_task);
 }
 
-void ComputeTask_Create(uint32_t max_frames_in_flight)
+void ComputeTask_AddImages_Create(const std::vector<Image>& images, const Image& gui, const Image& final_image)
+{
+	VkShaderModule shader_module = VK_NULL_HANDLE;
+
+	std::string shader_path = std::string(SDL_GetBasePath()).append("shaders\\glsl\\add_images.comp.glsl.spv");
+
+	SDL_IOStream* io_stream = SDL_IOFromFile(shader_path.c_str(), "rb");
+	size_t code_size = 0;
+	uint32_t* code = reinterpret_cast<uint32_t*>(SDL_LoadFile_IO(io_stream, &code_size, true));
+
+	const VkShaderModuleCreateInfo create_info = {
+		.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+		.codeSize = static_cast<size_t>(code_size),
+		.pCode = code,
+	};
+
+	VK_CHECK("create add images shader module", vkCreateShaderModule(Device_Device(), &create_info, nullptr, &shader_module));
+	SDL_free(code);
+
+	if (descriptor_mode == EDescriptorMode::DescHeap)
+	{
+		VkDeviceSize desc_size = ALIGNED_SIZE(PhysicalDeviceData_DescHeapProps().imageDescriptorSize, PhysicalDeviceData_DescHeapProps().imageDescriptorAlignment);
+		VkDeviceSize total_heap_size = ALIGNED_SIZE(PhysicalDeviceData_DescHeapProps().imageDescriptorSize, PhysicalDeviceData_DescHeapProps().imageDescriptorAlignment) * (_color_targets.size() + 1);
+		add_images.desc_heap.buffer = Allocator_CreateBuffer(total_heap_size, VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT, "descriptor heap");
+
+		VkDeviceSize offset = 0;
+
+		// color targets
+		for (const auto& color_target : _color_targets)
+		{
+			const VkImageViewCreateInfo iv_ci = {
+				.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+				.image = color_target.image,
+				.viewType = VK_IMAGE_VIEW_TYPE_2D,
+				.format = VK_FORMAT_R32G32B32A32_SFLOAT,
+				.components = VK_COMPONENT_SWIZZLE_IDENTITY,
+				.subresourceRange = {
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.levelCount = 1,
+					.layerCount = 1,
+				}
+			};
+
+			const VkImageDescriptorInfoEXT data = {
+				.sType = VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
+				.pView = &iv_ci,
+				.layout = VK_IMAGE_LAYOUT_GENERAL,
+			};
+
+			const VkResourceDescriptorInfoEXT resources = {
+				.sType = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
+				.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+				.data = &data,
+			};
+			void* addr = reinterpret_cast<void*>(reinterpret_cast<uint64_t>(add_images.desc_heap.buffer.allocation_info.allocationInfo.pMappedData) + offset);
+			VkHostAddressRangeEXT host_addr_rng = {
+				.address = addr,
+				.size = desc_size,
+			};
+
+			VK_CHECK("write resource descriptors", vkWriteResourceDescriptorsEXT(Device_Device(), 1, &resources, &host_addr_rng));
+			offset += desc_size;
+		}
+
+		// gui target
+		VkImageViewCreateInfo iv_ci = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			.image = gui.image,
+			.viewType = VK_IMAGE_VIEW_TYPE_2D,
+			.format = VK_FORMAT_R32G32B32A32_SFLOAT,
+			.components = VK_COMPONENT_SWIZZLE_IDENTITY,
+			.subresourceRange = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.levelCount = 1,
+				.layerCount = 1,
+			}
+		};
+
+		const VkImageDescriptorInfoEXT data = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
+			.pView = &iv_ci,
+			.layout = VK_IMAGE_LAYOUT_GENERAL,
+		};
+
+		const VkResourceDescriptorInfoEXT resources = {
+			.sType = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
+			.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			.data = &data,
+		};
+		void* addr = reinterpret_cast<void*>(reinterpret_cast<uint64_t>(add_images.desc_heap.buffer.allocation_info.allocationInfo.pMappedData) + offset);
+		VkHostAddressRangeEXT host_addr_rng = {
+			.address = addr,
+			.size = desc_size,
+		};
+
+		VK_CHECK("write resource descriptors", vkWriteResourceDescriptorsEXT(Device_Device(), 1, &resources, &host_addr_rng));
+		offset += desc_size;
+
+		// final image
+		iv_ci.image = final_image.image;
+
+		addr = reinterpret_cast<void*>(reinterpret_cast<uint64_t>(add_images.desc_heap.buffer.allocation_info.allocationInfo.pMappedData) + offset);
+		host_addr_rng.address = addr;
+		host_addr_rng.size = desc_size;
+
+		VK_CHECK("write resource descriptors", vkWriteResourceDescriptorsEXT(Device_Device(), 1, &resources, &host_addr_rng));
+		offset += desc_size;
+	}
+
+	vkDestroyShaderModule(Device_Device(), shader_module, nullptr);
+}
+
+void ComputeTask_AddImages_Destroy()
+{
+	vkDestroyPipeline(Device_Device(), add_images.pipeline, nullptr);
+	Allocator_DestroyBuffer(add_images.desc_heap.buffer);
+}
+
+void ComputeTask_Create(const std::vector<Image>& images, const Image& gui, const Image& final_image, uint32_t max_frames_in_flight)
 {
 	Task_Create(compute_task, Device_Compute_Queue(), PhysicalDeviceData_ComputeQueueFamilyIndex(), max_frames_in_flight, "compute task");
+
+	ComputeTask_AddImages_Create(images, gui, final_image);
 }
 
 void ComputeTask_Begin()
@@ -508,4 +667,5 @@ void ComputeTask_NextFrame()
 void ComputeTask_Destroy()
 {
 	Task_Destroy(compute_task);
+	ComputeTask_AddImages_Destroy();
 }

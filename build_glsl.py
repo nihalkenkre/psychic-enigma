@@ -26,8 +26,6 @@ def build_glsl(shader_path, build_type):
                 cmd += ' -g0 -Os '
             cmd += ' --target-env vulkan1.4 -o ' + str(spv_name)
 
-            print(cmd)
-
             subprocess.call(cmd)
 
 

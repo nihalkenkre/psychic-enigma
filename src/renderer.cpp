@@ -42,29 +42,29 @@ void Renderer_Create(SDL_Window* window)
 
 	surface_extent = Surface_Extent();
 
-	GraphicsTask_Create(Swapchain_MaxFramesInFlight(), VkExtent3D{ .width = surface_extent.width, .height = surface_extent.height, .depth = 1 });
-	ComputeTask_Create(2);
-	TransferTask_Create(2);
-
 	color_target = Allocator_CreateImage(
 		VK_FORMAT_R32G32B32A32_SFLOAT,
 		VkExtent3D{ .width = surface_extent.width, .height = surface_extent.height, .depth = 1 },
-		VK_IMAGE_USAGE_2_COLOR_ATTACHMENT_BIT_KHR | VK_IMAGE_USAGE_2_TRANSFER_SRC_BIT_KHR,
+		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
 		"color target"
 	);
 	gui_target = Allocator_CreateImage(
 		VK_FORMAT_R32G32B32A32_SFLOAT,
 		VkExtent3D{ .width = surface_extent.width, .height = surface_extent.height, .depth = 1 },
-		VK_IMAGE_USAGE_2_COLOR_ATTACHMENT_BIT_KHR | VK_IMAGE_USAGE_2_TRANSFER_SRC_BIT_KHR,
+		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
 		"gui target"
 	);
 
 	final_image = Allocator_CreateImage(
 		VK_FORMAT_R32G32B32A32_SFLOAT,
 		VkExtent3D{ .width = surface_extent.width, .height = surface_extent.height, .depth = 1 },
-		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
 		"final image"
 	);
+
+	GraphicsTask_Create(Swapchain_MaxFramesInFlight(), VkExtent3D{ .width = surface_extent.width, .height = surface_extent.height, .depth = 1 });
+	ComputeTask_Create({ color_target }, gui_target, final_image, Swapchain_MaxFramesInFlight());
+	TransferTask_Create(Swapchain_MaxFramesInFlight());
 }
 
 void Renderer_SetShuttingDown()

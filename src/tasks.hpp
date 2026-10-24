@@ -16,7 +16,8 @@ void GraphicsTask_Present();
 void GraphicsTask_NextFrame();
 void GraphicsTask_Destroy();
 
-void ComputeTask_Create(uint32_t max_frames_in_flight);
+void ComputeTask_Create(const std::vector<Image>& images, const Image& gui, const Image& final_image, uint32_t max_frames_in_flight);
+void ComputeTask_AddImages_Create(const std::vector<Image>& images, const Image& gui, const Image& final_image);
 void ComputeTask_Begin();
 void ComputeTask_End();
 void ComputeTask_Submit(std::vector<VkSemaphoreSubmitInfo> wait_sem_infos, std::vector<VkSemaphoreSubmitInfo> sig_sem_infos);

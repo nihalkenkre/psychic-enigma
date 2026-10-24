@@ -7,8 +7,10 @@
 
 struct PhysicalDeviceData {
 	VkPhysicalDevice physical_device;
-	VkPhysicalDeviceProperties2KHR properties;
-	VkPhysicalDeviceMemoryProperties2KHR memory_properties;
+	VkPhysicalDeviceProperties2KHR props;
+	VkPhysicalDeviceMemoryProperties2KHR mem_props;
+	VkPhysicalDeviceDescriptorHeapPropertiesEXT desc_heap_props;
+	VkPhysicalDeviceDescriptorBufferPropertiesEXT desc_buff_props;
 	uint32_t graphics_queue_family_index;
 	uint32_t compute_queue_family_index;
 	uint32_t transfer_queue_family_index;
@@ -37,8 +39,10 @@ struct SwapchainData {
 static VkInstance instance = VK_NULL_HANDLE;
 static uint32_t vk_api_version = 0;
 static PhysicalDeviceData physical_device_data = {
-.properties = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,},
-.memory_properties = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2,}
+.props = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,},
+.mem_props = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2,},
+.desc_heap_props = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT,} ,
+.desc_buff_props = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT, }
 };
 static SurfaceeData surface_data = {
 .capabilities = {
@@ -67,7 +71,7 @@ void Instance_Create()
 #endif
 	};
 
-	vk_api_version = VK_MAKE_API_VERSION(0, 1, 3, 0);
+	vk_api_version = VK_API_VERSION_1_4;
 
 	std::vector<const char*> all_extensions;
 
@@ -129,11 +133,14 @@ void Instance_GetPhysicalDeviceData()
 	std::vector<VkPhysicalDevice> physical_devices(physical_device_count);
 	VK_CHECK("enumerate physical devices", vkEnumeratePhysicalDevices(instance, &physical_device_count, physical_devices.data()));
 
+	physical_device_data.desc_heap_props.pNext = &physical_device_data.desc_buff_props;
+	physical_device_data.props.pNext = &physical_device_data.desc_heap_props;
+
 	for (auto const& physical_device : physical_devices)
 	{
-		vkGetPhysicalDeviceProperties2(physical_device, &physical_device_data.properties);
+		vkGetPhysicalDeviceProperties2(physical_device, &physical_device_data.props);
 
-		if (physical_device_data.properties.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+		if (physical_device_data.props.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
 		{
 			uint32_t q_fly_cnt = 0;
 			vkGetPhysicalDeviceQueueFamilyProperties2(physical_device, &q_fly_cnt, nullptr);
@@ -156,7 +163,7 @@ void Instance_GetPhysicalDeviceData()
 					physical_device_data.transfer_queue_family_index = q;
 					physical_device_data.compute_queue_family_index = q;
 
-					vkGetPhysicalDeviceMemoryProperties2(physical_device, &physical_device_data.memory_properties);
+					vkGetPhysicalDeviceMemoryProperties2(physical_device, &physical_device_data.mem_props);
 
 					break;
 				}
@@ -238,6 +245,16 @@ uint32_t PhysicalDeviceData_TransferQueueFamilyIndex()
 	return physical_device_data.transfer_queue_family_index;
 }
 
+VkPhysicalDeviceDescriptorHeapPropertiesEXT PhysicalDeviceData_DescHeapProps()
+{
+	return physical_device_data.desc_heap_props;
+}
+
+VkPhysicalDeviceDescriptorBufferPropertiesEXT PhysicalDeviceData_DescBufferProps()
+{
+	return physical_device_data.desc_buff_props;
+}
+
 void Surface_Create(SDL_Window* window)
 {
 	SDL_CHECK(SDL_Vulkan_CreateSurface(window, instance, nullptr, &surface_data.surface));
@@ -300,6 +317,16 @@ void Surface_Destroy()
 	SDL_Vulkan_DestroySurface(instance, surface_data.surface, nullptr);
 }
 
+EDescriptorMode descriptor_mode = EDescriptorMode::DescIndex;
+
+bool Device_IsExtensionSupported(const std::vector<VkExtensionProperties>& props, const char* ext_name)
+{
+	auto it = std::find_if(props.begin(), props.end(), [&](const VkExtensionProperties prop)
+		{ return (std::strcmp(prop.extensionName, ext_name) == 0); });
+
+	return it != props.end();
+}
+
 void Device_Create()
 {
 	std::vector<const char*> req_ext_names = {
@@ -323,6 +350,23 @@ void Device_Create()
 			printf("Extension %s is not supported by device\n", req_ext_name);
 		}
 	}
+
+#ifdef VK_EXT_descriptor_heap
+	if (Device_IsExtensionSupported(props, VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME))
+	{
+		req_ext_names.push_back(VK_KHR_SHADER_UNTYPED_POINTERS_EXTENSION_NAME);
+		req_ext_names.push_back(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME);
+		descriptor_mode = EDescriptorMode::DescHeap;
+	}
+#elifdef VK_EXT_descriptor_buffer
+	if (Device_IsExtensionSupported(props, VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME))
+	{
+		req_ext_names.push_back(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME);
+		descriptor_mode = EDescriptorMode::DescBuffer;
+	}
+#else
+	descriptor_mode = EDescriptorMode::DescIndex;
+#endif
 
 	VkDeviceQueueCreateInfo q_ci = {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
@@ -365,9 +409,35 @@ void Device_Create()
 		d_q_ci.pQueuePriorities = priorities[d_q_ci_idx].data();
 	}
 
+	VkPhysicalDeviceShaderUntypedPointersFeaturesKHR shdr_ut_feats = {
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_UNTYPED_POINTERS_FEATURES_KHR,
+	};
+
+	VkPhysicalDeviceDescriptorHeapFeaturesEXT desc_heap_feats = {
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT,
+	};
+
+	VkPhysicalDeviceDescriptorBufferFeaturesEXT desc_buffer_feats = {
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT,
+	};
+
 	VkPhysicalDeviceDynamicRenderingFeatures dyn_rend_feats = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
 	};
+
+	if (descriptor_mode == EDescriptorMode::DescHeap)
+	{
+		desc_heap_feats.pNext = &shdr_ut_feats;
+		dyn_rend_feats.pNext = &desc_heap_feats;
+	}
+	else if (descriptor_mode == EDescriptorMode::DescBuffer)
+	{
+		dyn_rend_feats.pNext = &desc_buffer_feats;
+	}
+	else if (descriptor_mode == EDescriptorMode::DescIndex)
+	{
+
+	}
 
 	VkPhysicalDeviceSynchronization2Features sync2_feats = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
@@ -433,7 +503,7 @@ void Device_Create()
 
 #ifdef _DEBUG
 	Utils_SetObjectName(device, VK_OBJECT_TYPE_DEVICE, reinterpret_cast<uint64_t>(device), "device");
-	Utils_SetObjectName(device, VK_OBJECT_TYPE_PHYSICAL_DEVICE, reinterpret_cast<uint64_t>(physical_device_data.physical_device), physical_device_data.properties.properties.deviceName);
+	Utils_SetObjectName(device, VK_OBJECT_TYPE_PHYSICAL_DEVICE, reinterpret_cast<uint64_t>(physical_device_data.physical_device), physical_device_data.props.properties.deviceName);
 	Utils_SetObjectName(device, VK_OBJECT_TYPE_QUEUE, reinterpret_cast<uint64_t>(graphics_queue), "graphics queue");
 	Utils_SetObjectName(device, VK_OBJECT_TYPE_QUEUE, reinterpret_cast<uint64_t>(transfer_queue), "transfer queue");
 	Utils_SetObjectName(device, VK_OBJECT_TYPE_QUEUE, reinterpret_cast<uint64_t>(compute_queue), "compute queue");
@@ -487,7 +557,7 @@ void Swapchain_Create()
 		.oldSwapchain = VK_NULL_HANDLE,
 	};
 
-	swapchain_data.max_frames_in_flight = create_info.minImageCount + EXTRA_FRAMES_IN_FLIGHT;
+	swapchain_data.max_frames_in_flight = create_info.minImageCount;
 
 	VK_CHECK("create swapchain", vkCreateSwapchainKHR(device, &create_info, nullptr, &swapchain_data.swapchain));
 	VK_CHECK("get swapchain images", vkGetSwapchainImagesKHR(device, swapchain_data.swapchain, &swapchain_data.image_count, nullptr));
@@ -690,21 +760,26 @@ void Allocator_DestroyImage(Image image)
 	}
 }
 
-Buffer Allocator_CreateBuffer(const VkDeviceSize size, const VkBufferUsageFlags usage)
+Buffer Allocator_CreateBuffer(const VkDeviceSize size, const VkBufferUsageFlags usage, const std::string& name)
 {
 	Buffer buffer = {};
 
 	const VkBufferCreateInfo buffer_create_info = {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 		.size = size,
-		.usage = usage,
+		.usage = usage | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 	};
 
 	const VmaAllocationCreateInfo allocation_create_info = {
+	    .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
 		.usage = VMA_MEMORY_USAGE_AUTO,
 	};
 
 	VK_CHECK("create buffer", vmaCreateBuffer(allocator, &buffer_create_info, &allocation_create_info, &buffer.buffer, &buffer.allocation, &buffer.allocation_info.allocationInfo));
+
+#ifdef _DEBUG
+	Utils_SetObjectName(Device_Device(), VK_OBJECT_TYPE_BUFFER, reinterpret_cast<uint64_t>(buffer.buffer), name + " buffer");
+#endif
 
 	return buffer;
 }
