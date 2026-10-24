@@ -21,6 +21,7 @@ struct Buffer {
 	VkBuffer buffer;
 	VmaAllocation allocation;
 	VmaAllocationInfo2 allocation_info;
+	VkDeviceAddress device_address;
 };
 
 void Instance_Create();
@@ -62,6 +63,6 @@ void Allocator_Create();
 Image Allocator_CreateImage(const VkFormat format, const VkExtent3D& extent, const VkImageUsageFlags usage, const std::string& name);
 void Allocator_DestroyImage(Image image);
 
-Buffer Allocator_CreateBuffer(const VkDeviceSize size, const VkBufferUsageFlags usage, const std::string& name);
+Buffer Allocator_CreateBuffer(const VkDeviceSize size, const VkBufferUsageFlags usage, const VmaAllocationCreateFlags flags, const std::string& name);
 void Allocator_DestroyBuffer(Buffer buffer);
 void Allocator_Destroy();

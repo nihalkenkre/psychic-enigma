@@ -26,7 +26,6 @@ static Image gui_target = {};
 static Image final_image = {};
 static VkExtent2D surface_extent = {};
 
-
 void Renderer_Create(SDL_Window* window)
 {
 	VK_CHECK("volk initialize", volkInitialize());
@@ -83,10 +82,13 @@ static int GraphicsThread(void* ptr)
 		GraphicsTask_BeginGUIRenderPass(gui_target, VkRect2D{ .extent = Surface_Extent() });
 		GraphicsTask_RenderGUI();
 		GraphicsTask_EndGUIRenderPass();
-		GraphicsTask_End();
+		GraphicsTask_End(final_image);
 
 		SDL_LockMutex(graphics_mut);
-		GraphicsTask_Submit({}, {});
+		GraphicsTask_Submit();
+		SDL_UnlockMutex(graphics_mut);
+
+		SDL_LockMutex(graphics_mut);
 		GraphicsTask_Present();
 		SDL_UnlockMutex(graphics_mut);
 
@@ -103,10 +105,11 @@ static int ComputeThread(void* ptr)
 	while (SDL_GetAtomicInt(&is_shutting_down) != 1)
 	{
 		ComputeTask_Begin();
+		ComputeTask_AddImages();
 		ComputeTask_End();
 
 		SDL_LockMutex(compute_mut);
-		ComputeTask_Submit({}, {});
+		ComputeTask_Submit();
 		SDL_UnlockMutex(compute_mut);
 
 		ComputeTask_NextFrame();

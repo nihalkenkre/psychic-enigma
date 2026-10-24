@@ -760,7 +760,7 @@ void Allocator_DestroyImage(Image image)
 	}
 }
 
-Buffer Allocator_CreateBuffer(const VkDeviceSize size, const VkBufferUsageFlags usage, const std::string& name)
+Buffer Allocator_CreateBuffer(const VkDeviceSize size, const VkBufferUsageFlags usage, const VmaAllocationCreateFlags flags, const std::string& name)
 {
 	Buffer buffer = {};
 
@@ -771,11 +771,18 @@ Buffer Allocator_CreateBuffer(const VkDeviceSize size, const VkBufferUsageFlags 
 	};
 
 	const VmaAllocationCreateInfo allocation_create_info = {
-	    .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
+	    .flags = flags,
 		.usage = VMA_MEMORY_USAGE_AUTO,
 	};
 
 	VK_CHECK("create buffer", vmaCreateBuffer(allocator, &buffer_create_info, &allocation_create_info, &buffer.buffer, &buffer.allocation, &buffer.allocation_info.allocationInfo));
+
+	const VkBufferDeviceAddressInfo addr_info = {
+		.sType= VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+		.buffer = buffer.buffer,
+	};
+
+	buffer.device_address = vkGetBufferDeviceAddress(Device_Device(), &addr_info);
 
 #ifdef _DEBUG
 	Utils_SetObjectName(Device_Device(), VK_OBJECT_TYPE_BUFFER, reinterpret_cast<uint64_t>(buffer.buffer), name + " buffer");
