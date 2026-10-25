@@ -608,7 +608,7 @@ void Swapchain_Create()
 	for (uint32_t i = 0; i < swapchain_data.max_frames_in_flight; ++i)
 	{
 		Utils_SetObjectName(device, VK_OBJECT_TYPE_SEMAPHORE, reinterpret_cast<uint64_t>(swapchain_data.acq_sig_sems[i]), std::string("swapchain acq sig sem ").append(std::to_string(i)).c_str());
-		Utils_SetObjectName(device, VK_OBJECT_TYPE_SEMAPHORE, reinterpret_cast<uint64_t>(swapchain_data.prsnt_wait_sems[i]), std::string("swapchain prsnt sig sem ").append(std::to_string(i)).c_str());
+		Utils_SetObjectName(device, VK_OBJECT_TYPE_SEMAPHORE, reinterpret_cast<uint64_t>(swapchain_data.prsnt_wait_sems[i]), std::string("swapchain prsnt wait sem ").append(std::to_string(i)).c_str());
 	}
 #endif
 }

@@ -1,6 +1,8 @@
 #include "renderer.hpp"
 #include "vulkan_objects.hpp"
-#include "tasks.hpp"
+#include "graphics_tasks.hpp"
+#include "compute_tasks.hpp"
+#include "transfer_tasks.hpp"
 #include "utils.hpp"
 #include "gui.hpp"
 
@@ -128,7 +130,7 @@ static int TransferThread(void* ptr)
 		TransferTask_End();
 
 		SDL_LockMutex(transfer_mut);
-		TransferTask_Submit({}, {});
+		TransferTask_Submit();
 		SDL_UnlockMutex(transfer_mut);
 
 		TransferTask_NextFrame();

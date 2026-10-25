@@ -1,41 +1,29 @@
 #pragma once
 
 #include <vector>
-#include "vulkan_objects.hpp"
+#include <volk.h> 
+#include <string>
 
-void GraphicsTask_Create(uint32_t max_frames_in_flight, const VkExtent3D& extent);
-void GraphicsTask_Begin();
-void GraphicsTask_BeginRenderPass(const std::vector<Image>& color_targets, const VkRect2D render_area);
-void GraphicsTask_BeginGUIRenderPass(const Image& gui_target, const VkRect2D render_area);
-void GraphicsTask_RenderGUI();
-void GraphicsTask_EndGUIRenderPass();
-void GraphicsTask_EndRenderPass();
-void GraphicsTask_End(const Image final_image);
-void GraphicsTask_Submit();
-void GraphicsTask_Present();
-void GraphicsTask_NextFrame();
-void GraphicsTask_Destroy();
+struct Task {
+	VkCommandPool command_pool;
+	std::vector<VkCommandBuffer> command_buffers;
+	std::vector<VkSemaphore> semaphores;
+	std::vector<uint64_t> semaphore_values;
 
-VkSemaphore GraphicsTask_Semaphore();
-uint64_t GraphicsTask_SemaphoreValue();
+	VkQueue queue;
+	uint32_t queue_family_index;
 
-void ComputeTask_Create(const std::vector<Image>& images, const Image& gui, const Image& final_image, uint32_t max_frames_in_flight);
-void ComputeTask_Begin();
-void ComputeTask_AddImages();
-void ComputeTask_End();
-void ComputeTask_Submit();
-void ComputeTask_NextFrame();
-void ComputeTask_Destroy();
+	uint32_t max_frames_in_flight;
+	uint32_t current_frame;
+};
 
-VkSemaphore ComputeTask_Semaphore();
-uint64_t ComputeTask_SemaphoreValue();
-
-void TransferTask_Create(uint32_t max_frames_in_flight);
-void TransferTask_Begin();
-void TransferTask_End();
-void TransferTask_Submit(std::vector<VkSemaphoreSubmitInfo> wait_sem_infos, std::vector<VkSemaphoreSubmitInfo> sig_sem_infos);
-void TransferTask_NextFrame();
-void TransferTask_Destroy();
-
-VkSemaphore TransferTask_Semaphore();
-uint64_t TransferTask_SemaphoreValue();
+void Task_Create(Task& task, VkQueue queue, const uint32_t queue_family_index, const uint32_t max_frames_in_flight, const std::string& name);
+VkCommandBuffer Task_CommandBuffer(const Task& task);
+VkSemaphore Task_Semaphore(const Task& task);
+uint64_t Task_SemaphoreValue(Task& task);
+void Task_Start(Task& task);
+void Task_End(const Task& task);
+void Task_Submit(Task& task, std::vector<VkSemaphoreSubmitInfo> wait_sem_infos, std::vector<VkSemaphoreSubmitInfo> sig_sem_infos);
+void Task_NextFrame(Task& task);
+void Task_NextFrame(Task& task);
+void Task_Destroy(Task task);
