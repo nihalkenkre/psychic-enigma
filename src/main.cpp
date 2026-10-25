@@ -17,7 +17,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv)
 
 	App_Create(window);
 	Renderer_Create(window);
-	Renderer_StartJobs();
+	//Renderer_StartJobs();
 
 	return SDL_APP_CONTINUE;
 }
@@ -42,6 +42,7 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event)
 
 SDL_AppResult SDL_AppIterate(void* appstate)
 {
+	Renderer_Render();
 	return SDL_APP_CONTINUE;
 }
 

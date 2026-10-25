@@ -3,6 +3,7 @@
 #include "graphics_tasks.hpp"
 #include "compute_tasks.hpp"
 #include "transfer_tasks.hpp"
+#include "tasks.hpp"
 #include "utils.hpp"
 #include "gui.hpp"
 
@@ -22,6 +23,8 @@ static SDL_Thread* transfer_th;
 static SDL_Mutex* transfer_mut;
 
 static Renderer renderer = {};
+static Task renderer_task = {};
+static SDL_Mutex* renderer_task_mut;
 
 static Image color_target = {};
 static Image gui_target = {};
@@ -68,6 +71,9 @@ void Renderer_Create(SDL_Window* window)
 	ComputeTask_AddImages_Create({ color_target }, gui_target, final_image);
 	ComputeTask_CopyImageToSwapchain_Create();
 	TransferTask_Create(Swapchain_MaxFramesInFlight());
+
+	Task_Create(renderer_task, Device_Graphics_Queue(), PhysicalDeviceData_GraphicsQueueFamilyIndex(), Swapchain_MaxFramesInFlight(), "renderer task");
+	renderer_task_mut = SDL_CreateMutex();
 }
 
 void Renderer_SetShuttingDown()
@@ -93,7 +99,7 @@ static int GraphicsThread(void* ptr)
 		SDL_UnlockMutex(graphics_mut);
 
 		SDL_LockMutex(graphics_mut);
-		GraphicsTask_Present();
+		GraphicsTask_Present(ComputeTask_SwapchainIndex());
 		SDL_UnlockMutex(graphics_mut);
 
 		GraphicsTask_NextFrame();
@@ -129,16 +135,16 @@ static int TransferThread(void* ptr)
 {
 	while (SDL_GetAtomicInt(&is_shutting_down) != 1)
 	{
-		//TransferTask_Begin();
-		//TransferTask_End();
+		TransferTask_Begin();
+		TransferTask_End();
 
-		//SDL_LockMutex(transfer_mut);
-		//TransferTask_Submit();
-		//SDL_UnlockMutex(transfer_mut);
+		SDL_LockMutex(transfer_mut);
+		TransferTask_Submit();
+		SDL_UnlockMutex(transfer_mut);
 
-		//TransferTask_NextFrame();
+		TransferTask_NextFrame();
 
-		//SDL_Delay(16);
+		SDL_Delay(16);
 	}
 
 	return 0;
@@ -160,6 +166,19 @@ void Renderer_Event(SDL_Event* event)
 	GUI_Event(event);
 }
 
+void Renderer_Render()
+{
+	Task_Begin(renderer_task);
+	Task_End(renderer_task);
+
+	SDL_LockMutex(renderer_task_mut);
+	Task_Submit(renderer_task, {}, {});
+	SDL_UnlockMutex(renderer_task_mut);
+
+	Task_NextFrame(renderer_task);
+	Swapchain_NextFrame();
+}
+
 void Renderer_Destroy()
 {
 	SDL_WaitThread(transfer_th, nullptr);
@@ -170,11 +189,15 @@ void Renderer_Destroy()
 	SDL_DestroyMutex(compute_mut);
 	SDL_DestroyMutex(graphics_mut);
 
+	SDL_DestroyMutex(renderer_task_mut);
+
 	VK_CHECK("wait device", vkDeviceWaitIdle(Device_Device()));
 
 	Allocator_DestroyImage(final_image);
 	Allocator_DestroyImage(gui_target);
 	Allocator_DestroyImage(color_target);
+
+	Task_Destroy(renderer_task);
 	TransferTask_Destroy();
 	ComputeTask_Destroy();
 	GraphicsTask_Destroy();

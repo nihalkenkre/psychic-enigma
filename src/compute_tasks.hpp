@@ -8,6 +8,7 @@ void ComputeTask_AddImages_Create(const std::vector<Image>& images, const Image&
 void ComputeTask_CopyImageToSwapchain_Create();
 void ComputeTask_Begin();
 void ComputeTask_AddImages();
+uint32_t ComputeTask_SwapchainIndex();
 void ComputeTask_CopyImageToSwapchain(const VkImage src_image);
 void ComputeTask_End();
 void ComputeTask_Submit();

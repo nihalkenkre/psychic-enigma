@@ -17,7 +17,7 @@ void GraphicsTask_Create(uint32_t max_frames_in_flight, const VkExtent3D& extent
 
 void GraphicsTask_Begin()
 {
-	Task_Start(graphics_task);
+	Task_Begin(graphics_task);
 }
 
 VkSemaphore GraphicsTask_Semaphore()
@@ -132,12 +132,28 @@ void GraphicsTask_Submit()
 			.value = ComputeTask_SemaphoreValue(),
 			.stageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
 		},
+		{
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+			.semaphore = GraphicsTask_Semaphore(),
+			.value = GraphicsTask_SemaphoreValue(),
+			.stageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+		},
 	};
 
-	Task_Submit(graphics_task, wait_sem_infos, {});
+	const VkSemaphoreSubmitInfo sig_sem_info = {
+		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+		.semaphore = GraphicsTask_Semaphore(),
+		.value = GraphicsTask_SemaphoreValue() + 1,
+		.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+	};
+
+	//printf("graphics submit\n");
+	//printf("compute sem value: %lld graphics sem value: %lld\n", wait_sem_infos.at(0).value, wait_sem_infos.at(1).value);
+
+	Task_Submit(graphics_task, wait_sem_infos, { sig_sem_info });
 }
 
-void GraphicsTask_Present()
+void GraphicsTask_Present(const uint32_t swapchain_image_index)
 {
 	const VkSemaphore wait_semaphores[] = {
 		ComputeTask_Semaphore(),
@@ -169,6 +185,9 @@ void GraphicsTask_Present()
 		.pSwapchains = &swapchain,
 		.pImageIndices = &swapchain_image_index,
 	};
+
+	//printf("graphics present\n");
+	//printf("compute sem value: %lld graphics sem value: %lld\n", wait_semaphore_values[0], wait_semaphore_values[1]);
 	VK_CHECK("queue present", vkQueuePresentKHR(graphics_task.queue, &present_info));
 }
 

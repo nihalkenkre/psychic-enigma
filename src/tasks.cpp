@@ -79,7 +79,7 @@ VkSemaphore Task_Semaphore(const Task& task)
 	return task.semaphores.at(task.current_frame);
 }
 
-uint64_t Task_SemaphoreValue(Task& task)
+uint64_t Task_SemaphoreValue(const Task& task)
 {
 	uint64_t value = 0;
 
@@ -87,7 +87,7 @@ uint64_t Task_SemaphoreValue(Task& task)
 	return value;
 }
 
-void Task_Start(Task& task)
+void Task_Begin(const Task& task)
 {
 	VkSemaphore semaphore = Task_Semaphore(task);
 	uint64_t value = Task_SemaphoreValue(task);
@@ -159,7 +159,7 @@ void Task_Submit(Task& task, std::vector<VkSemaphoreSubmitInfo> wait_sem_infos, 
 		{
 			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
 			.commandBuffer = Task_CommandBuffer(task),
-}
+		}
 	};
 
 	sig_sem_infos.push_back(

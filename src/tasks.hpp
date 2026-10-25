@@ -20,8 +20,8 @@ struct Task {
 void Task_Create(Task& task, VkQueue queue, const uint32_t queue_family_index, const uint32_t max_frames_in_flight, const std::string& name);
 VkCommandBuffer Task_CommandBuffer(const Task& task);
 VkSemaphore Task_Semaphore(const Task& task);
-uint64_t Task_SemaphoreValue(Task& task);
-void Task_Start(Task& task);
+uint64_t Task_SemaphoreValue(const Task& task);
+void Task_Begin(const Task& task);
 void Task_ChangeImageLayout(
 	const Task& task,
 	VkImage image,

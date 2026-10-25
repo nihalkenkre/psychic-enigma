@@ -13,7 +13,7 @@ void TransferTask_Create(uint32_t max_frames_in_flight)
 
 void TransferTask_Begin()
 {
-	Task_Start(transfer_task);
+	Task_Begin(transfer_task);
 }
 
 void TransferTask_End()
@@ -23,6 +23,34 @@ void TransferTask_End()
 
 void TransferTask_Submit()
 {
+	const std::vector<VkSemaphoreSubmitInfo> wait_sem_infos = {
+		{
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+			.semaphore = ComputeTask_Semaphore(),
+			.value = ComputeTask_SemaphoreValue(),
+			.stageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+		},
+		{
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+			.semaphore = GraphicsTask_Semaphore(),
+			.value = GraphicsTask_SemaphoreValue(),
+			.stageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+		},
+		{
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+			.semaphore = TransferTask_Semaphore(),
+			.value = TransferTask_SemaphoreValue(),
+			.stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+		},
+	};
+
+	const VkSemaphoreSubmitInfo sig_sem_info = {
+		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+		.semaphore = TransferTask_Semaphore(),
+		.value = TransferTask_SemaphoreValue() + 1,
+		.stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+	};
+
 	Task_Submit(transfer_task, {}, {});
 }
 

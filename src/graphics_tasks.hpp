@@ -12,7 +12,7 @@ void GraphicsTask_EndGUIRenderPass();
 void GraphicsTask_EndRenderPass();
 void GraphicsTask_End();
 void GraphicsTask_Submit();
-void GraphicsTask_Present();
+void GraphicsTask_Present(const uint32_t swapchain_image_index);
 void GraphicsTask_NextFrame();
 void GraphicsTask_Destroy();
 
