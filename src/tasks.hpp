@@ -22,6 +22,13 @@ VkCommandBuffer Task_CommandBuffer(const Task& task);
 VkSemaphore Task_Semaphore(const Task& task);
 uint64_t Task_SemaphoreValue(Task& task);
 void Task_Start(Task& task);
+void Task_ChangeImageLayout(
+	const Task& task,
+	VkImage image,
+	VkImageLayout old_layout, VkImageLayout new_layout,
+	VkPipelineStageFlags2 src_stage_mask, VkAccessFlags2 src_access_mask,
+	VkPipelineStageFlags2 dst_stage_mask, VkAccessFlags2 dst_access_mask
+);
 void Task_End(const Task& task);
 void Task_Submit(Task& task, std::vector<VkSemaphoreSubmitInfo> wait_sem_infos, std::vector<VkSemaphoreSubmitInfo> sig_sem_infos);
 void Task_NextFrame(Task& task);

@@ -42,8 +42,44 @@ struct AddImages {
 		//DescIndexing desc_indexing;
 	};
 };
+struct CopyImageToSwapchain {
+	struct PushConstantRange {
+		uint32_t image_width;
+		uint32_t image_height;
+	};
+
+	VkPipeline pipeline;
+
+	// Heap
+	struct DescHeap {
+		Buffer buffer;
+	};
+
+	// Buffer
+	//struct DescBuffer {
+	//	Buffer buffer;
+	//	VkPipelineLayout pipeline_layout;
+	//	VkDescriptorSetLayout desc_set_layout;
+	//	VkDeviceSize desc_set_layout_size;
+	//};
+
+	//// Indexing
+	//struct DescIndexing {
+	//	VkDescriptorPool desc_pool;
+	//	VkDescriptorSet desc_set;
+	//	VkPipelineLayout pipeline_layout;
+	//	VkDescriptorSetLayout desc_set_layout;
+	//};
+
+	union {
+		DescHeap desc_heap;
+		//DescBuffer desc_buffer;
+		//DescIndexing desc_indexing;
+	};
+};
 
 static AddImages add_images = {};
+static CopyImageToSwapchain copy_image_to_swapchain = {};
 
 static std::vector<Image> _color_targets;
 static Image _gui_target;
@@ -102,7 +138,7 @@ void ComputeTask_AddImages_Create(const std::vector<Image>& color_targets, const
 		add_images.desc_heap.buffer = Allocator_CreateBuffer(
 			total_heap_size, VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT,
 			VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-			"descriptor heap"
+			"add images descriptor heap"
 		);
 
 		VkDeviceSize offset = 0;
@@ -220,10 +256,28 @@ void ComputeTask_AddImages()
 		}
 	};
 
-	vkCmdBindPipeline(Task_CommandBuffer(compute_task), VK_PIPELINE_BIND_POINT_COMPUTE, add_images.pipeline);
-	vkCmdBindResourceHeapEXT(Task_CommandBuffer(compute_task), &bind_info);
-	vkCmdPushDataEXT(Task_CommandBuffer(compute_task), &push_data);
-	vkCmdDispatch(Task_CommandBuffer(compute_task), Surface_Extent().width / 32, Surface_Extent().height / 32, 1);
+	VkCommandBuffer cmd_buff = Task_CommandBuffer(compute_task);
+
+	vkCmdBindPipeline(cmd_buff, VK_PIPELINE_BIND_POINT_COMPUTE, add_images.pipeline);
+	vkCmdBindResourceHeapEXT(cmd_buff, &bind_info);
+	vkCmdPushDataEXT(cmd_buff, &push_data);
+	vkCmdDispatch(cmd_buff, Surface_Extent().width / 32 + 1, Surface_Extent().height / 32 + 1, 1);
+
+	const VkMemoryBarrier2 mem_barr = {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+		.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+		.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
+		.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+		.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+	};
+
+	const VkDependencyInfo dep_info = {
+		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		.memoryBarrierCount = 1,
+		.pMemoryBarriers = &mem_barr,
+	};
+
+	vkCmdPipelineBarrier2(cmd_buff, &dep_info);
 }
 
 void ComputeTask_AddImages_Destroy()
@@ -232,11 +286,197 @@ void ComputeTask_AddImages_Destroy()
 	Allocator_DestroyBuffer(add_images.desc_heap.buffer);
 }
 
-void ComputeTask_Create(const std::vector<Image>& images, const Image& gui, const Image& final_image, uint32_t max_frames_in_flight)
+void ComputeTask_CopyImageToSwapchain_Create()
+{
+	VkShaderModule shader_module = VK_NULL_HANDLE;
+
+	std::string shader_path = std::string(SDL_GetBasePath()).append("shaders\\glsl\\copy_image_to_swapchain.comp.glsl.spv");
+
+	SDL_IOStream* io_stream = SDL_IOFromFile(shader_path.c_str(), "rb");
+	size_t code_size = 0;
+	uint32_t* code = reinterpret_cast<uint32_t*>(SDL_LoadFile_IO(io_stream, &code_size, true));
+
+	const VkShaderModuleCreateInfo create_info = {
+		.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+		.codeSize = static_cast<size_t>(code_size),
+		.pCode = code,
+	};
+
+	VK_CHECK("create copy image shader module", vkCreateShaderModule(Device_Device(), &create_info, nullptr, &shader_module));
+	SDL_free(code);
+
+	const VkPipelineShaderStageCreateInfo stage_create_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+		.module = shader_module,
+		.pName = "main",
+	};
+
+	const VkPipelineCreateFlags2CreateInfo pipeline_create_flags = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
+		.flags = VK_PIPELINE_CREATE_2_DESCRIPTOR_HEAP_BIT_EXT,
+	};
+
+	const VkComputePipelineCreateInfo pipeline_create_info = {
+		.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+		.pNext = &pipeline_create_flags,
+		.stage = stage_create_info,
+	};
+
+	VK_CHECK("create copy image pipeline", vkCreateComputePipelines(Device_Device(), VK_NULL_HANDLE, 1, &pipeline_create_info, nullptr, &add_images.pipeline));
+
+	if (descriptor_mode == EDescriptorMode::DescHeap)
+	{
+		VkPhysicalDeviceDescriptorHeapPropertiesEXT desc_heap_props = PhysicalDeviceData_DescHeapProps();
+		copy_image_to_swapchain.desc_heap.buffer = Allocator_CreateBuffer(
+			max(2 * ALIGNED_SIZE(desc_heap_props.imageDescriptorSize, desc_heap_props.imageDescriptorAlignment), desc_heap_props.minResourceHeapReservedRange),
+			VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT,
+			VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+			"copy image to swapchain descriptor heap"
+		);
+	}
+	else if (descriptor_mode == EDescriptorMode::DescBuffer)
+	{
+
+	}
+	else
+	{
+	}
+}
+
+void ComputeTask_CopyImageToSwapchain(const VkImage src_image)
+{
+	const VkAcquireNextImageInfoKHR acq_info = {
+			.sType = VK_STRUCTURE_TYPE_ACQUIRE_NEXT_IMAGE_INFO_KHR,
+			.swapchain = Swapchain_Swapchain(),
+			.timeout = UINT64_MAX,
+			.semaphore = Swapchain_AcqSigSem(),
+			.deviceMask = 1,
+	};
+
+	uint32_t image_index = 0;
+	VK_CHECK("acquire next image", vkAcquireNextImage2KHR(Device_Device(), &acq_info, &image_index));
+
+	VkImage swapchain_image = Swapchain_Image(image_index);
+
+	if (descriptor_mode == EDescriptorMode::DescHeap)
+	{
+		VkPhysicalDeviceDescriptorHeapPropertiesEXT desc_heap_props = PhysicalDeviceData_DescHeapProps();
+		copy_image_to_swapchain.desc_heap.buffer = Allocator_CreateBuffer(
+			ALIGNED_SIZE(max(2 * ALIGNED_SIZE(desc_heap_props.imageDescriptorSize, desc_heap_props.imageDescriptorAlignment), desc_heap_props.minResourceHeapReservedRange), desc_heap_props.imageDescriptorAlignment),
+			VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT,
+			VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+			"copy image to swapchain descriptor heap"
+		);
+
+		const VkImageViewCreateInfo final_image_view_create_info = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			.image = src_image,
+			.viewType = VK_IMAGE_VIEW_TYPE_2D,
+			.format = VK_FORMAT_R32G32B32A32_SFLOAT,
+			.subresourceRange = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.levelCount = 1,
+				.layerCount = 1
+			}
+		};
+
+		const VkImageDescriptorInfoEXT final_image_desc_info = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
+			.pView = &final_image_view_create_info,
+			.layout = VK_IMAGE_LAYOUT_GENERAL,
+		};
+
+		const VkResourceDescriptorDataEXT final_image_data = {
+			.pImage = &final_image_desc_info,
+		};
+
+		const VkImageViewCreateInfo swapchain_image_view_create_info = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			.image = swapchain_image,
+			.viewType = VK_IMAGE_VIEW_TYPE_2D,
+			.format = VK_FORMAT_R8G8B8A8_UNORM,
+			.subresourceRange = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.levelCount = 1,
+				.layerCount = 1,
+			}
+		};
+		const VkImageDescriptorInfoEXT swapchain_image_desc_info = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
+			.pView = &swapchain_image_view_create_info,
+			.layout = VK_IMAGE_LAYOUT_GENERAL,
+		};
+
+		const VkResourceDescriptorDataEXT swapchain_image_data = {
+			.pImage = &swapchain_image_desc_info,
+		};
+
+		const VkResourceDescriptorInfoEXT resources[] = {
+			{
+				.sType = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
+				.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+				.data = final_image_data,
+			},
+			{
+				.sType = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
+				.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+				.data = swapchain_image_data,
+			}
+		};
+
+		const VkHostAddressRangeEXT addr_range = {
+			.address = copy_image_to_swapchain.desc_heap.buffer.allocation_info.allocationInfo.pMappedData,
+			.size = copy_image_to_swapchain.desc_heap.buffer.allocation_info.allocationInfo.size,
+		};
+
+		VK_CHECK("write resource desc", vkWriteResourceDescriptorsEXT(Device_Device(), _countof(resources), resources, &addr_range));
+	}
+	else if (descriptor_mode == EDescriptorMode::DescBuffer)
+	{
+
+	}
+	else
+	{
+	}
+
+	const VkBindHeapInfoEXT bind_info = {
+		.sType = VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
+		.heapRange = copy_image_to_swapchain.desc_heap.buffer.allocation_info.allocationInfo.size,
+	};
+
+	const CopyImageToSwapchain::PushConstantRange pc = {
+		.image_width = Surface_Extent().width,
+		.image_height = Surface_Extent().height,
+	};
+
+	const VkHostAddressRangeConstEXT addr_range = {
+		.address = &pc,
+		.size = sizeof(CopyImageToSwapchain::PushConstantRange),
+	};
+
+	const VkPushDataInfoEXT push_data = {
+		.sType = VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
+		.data = &addr_range,
+	};
+
+	VkCommandBuffer cmd_buff = Task_CommandBuffer(compute_task);
+
+	vkCmdBindPipeline(cmd_buff, VK_PIPELINE_BIND_POINT_COMPUTE, copy_image_to_swapchain.pipeline);
+	vkCmdBindResourceHeapEXT(Task_CommandBuffer(compute_task), &bind_info);
+	vkCmdPushDataEXT(Task_CommandBuffer(compute_task), &push_data);
+	vkCmdDispatch(Task_CommandBuffer(compute_task), Surface_Extent().width / 32 + 1, Surface_Extent().height / 32 + 1, 1);
+}
+
+void ComputeTask_CopyImageToSwapchain_Destroy()
+{
+	vkDestroyPipeline(Device_Device(), copy_image_to_swapchain.pipeline, nullptr);
+	Allocator_DestroyBuffer(copy_image_to_swapchain.desc_heap.buffer);
+}
+
+void ComputeTask_Create(uint32_t max_frames_in_flight)
 {
 	Task_Create(compute_task, Device_Compute_Queue(), PhysicalDeviceData_ComputeQueueFamilyIndex(), max_frames_in_flight, "compute task");
-
-	ComputeTask_AddImages_Create(images, gui, final_image);
 }
 
 void ComputeTask_Begin()
@@ -253,11 +493,18 @@ void ComputeTask_Submit()
 {
 	VkSemaphore prsnt_wait_sem = Swapchain_PrsntWaitSem();
 
-	const VkSemaphoreSubmitInfo wait_sem_info = {
-		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-		.semaphore = GraphicsTask_Semaphore(),
-		.value = GraphicsTask_SemaphoreValue(),
-		.stageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+	const std::vector<VkSemaphoreSubmitInfo> wait_sem_infos = {
+		{
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+			.semaphore = GraphicsTask_Semaphore(),
+			.value = GraphicsTask_SemaphoreValue(),
+			.stageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+		},
+		{
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+			.semaphore = Swapchain_AcqSigSem(),
+			.stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+		}
 	};
 
 	const VkSemaphoreSubmitInfo sig_sem_info = {
@@ -267,7 +514,7 @@ void ComputeTask_Submit()
 		.stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
 	};
 
-	Task_Submit(compute_task, { wait_sem_info }, { sig_sem_info });
+	Task_Submit(compute_task, wait_sem_infos, { sig_sem_info });
 }
 
 void ComputeTask_NextFrame()
@@ -278,6 +525,7 @@ void ComputeTask_NextFrame()
 void ComputeTask_Destroy()
 {
 	Task_Destroy(compute_task);
+	ComputeTask_CopyImageToSwapchain_Destroy();
 	ComputeTask_AddImages_Destroy();
 }
 

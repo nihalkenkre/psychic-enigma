@@ -109,6 +109,37 @@ void Task_Start(Task& task)
 	VK_CHECK("start task", vkBeginCommandBuffer(Task_CommandBuffer(task), &begin_info));
 }
 
+void Task_ChangeImageLayout(const Task& task, VkImage image, VkImageLayout old_layout, VkImageLayout new_layout, VkPipelineStageFlags2 src_stage_mask, VkAccessFlags2 src_access_mask, VkPipelineStageFlags2 dst_stage_mask, VkAccessFlags2 dst_access_mask)
+{
+	const VkImageMemoryBarrier2 img_mem_barrs[] = {
+		{
+			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.srcStageMask = src_stage_mask,
+			.srcAccessMask = src_access_mask,
+			.dstStageMask = dst_stage_mask,
+			.dstAccessMask = dst_access_mask,
+			.oldLayout = old_layout,
+			.newLayout = new_layout,
+			.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+			.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+			.image = image,
+			.subresourceRange = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.levelCount = 1,
+			.layerCount = 1,
+},
+}
+	};
+
+	const VkDependencyInfo dependency_info = {
+		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		.imageMemoryBarrierCount = _countof(img_mem_barrs),
+		.pImageMemoryBarriers = img_mem_barrs,
+	};
+
+	vkCmdPipelineBarrier2(Task_CommandBuffer(task), &dependency_info);
+}
+
 void Task_End(const Task& task)
 {
 	VK_CHECK("end task", vkEndCommandBuffer(Task_CommandBuffer(task)));

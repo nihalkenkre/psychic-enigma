@@ -30,47 +30,12 @@ uint64_t GraphicsTask_SemaphoreValue()
 	return Task_SemaphoreValue(graphics_task);
 }
 
-void GraphicsTask_ChangeImageLayout(
-	VkImage image,
-	VkImageLayout old_layout, VkImageLayout new_layout,
-	VkPipelineStageFlags2 src_stage_mask, VkAccessFlags2 src_access_mask,
-	VkPipelineStageFlags2 dst_stage_mask, VkAccessFlags2 dst_access_mask
-)
-{
-	const VkImageMemoryBarrier2 img_mem_barrs[] = {
-		{
-			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-			.srcStageMask = src_stage_mask,
-			.srcAccessMask = src_access_mask,
-			.dstStageMask = dst_stage_mask,
-			.dstAccessMask = dst_access_mask,
-			.oldLayout = old_layout,
-			.newLayout = new_layout,
-			.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-			.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-			.image = image,
-			.subresourceRange = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.levelCount = 1,
-			.layerCount = 1,
-},
-}
-	};
-
-	const VkDependencyInfo dependency_info = {
-		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-		.imageMemoryBarrierCount = _countof(img_mem_barrs),
-		.pImageMemoryBarriers = img_mem_barrs,
-	};
-
-	vkCmdPipelineBarrier2(Task_CommandBuffer(graphics_task), &dependency_info);
-}
-
 void GraphicsTask_BeginRenderPass(const std::vector<Image>& color_targets, const VkRect2D render_area)
 {
 	for (const auto& color_target : color_targets)
 	{
-		GraphicsTask_ChangeImageLayout(
+		Task_ChangeImageLayout(
+			graphics_task,
 			color_target.image,
 			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
 			VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, 0,
@@ -111,7 +76,8 @@ void GraphicsTask_BeginRenderPass(const std::vector<Image>& color_targets, const
 
 void GraphicsTask_BeginGUIRenderPass(const Image& gui_target, const VkRect2D render_area)
 {
-	GraphicsTask_ChangeImageLayout(
+	Task_ChangeImageLayout(
+		graphics_task,
 		gui_target.image,
 		VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
 		VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, 0,
@@ -152,67 +118,8 @@ void GraphicsTask_EndRenderPass()
 	vkCmdEndRendering(Task_CommandBuffer(graphics_task));
 }
 
-void GraphicsTask_End(const Image& final_image)
+void GraphicsTask_End()
 {
-	const VkAcquireNextImageInfoKHR acq_info = {
-		.sType = VK_STRUCTURE_TYPE_ACQUIRE_NEXT_IMAGE_INFO_KHR,
-		.swapchain = Swapchain_Swapchain(),
-		.timeout = UINT64_MAX,
-		.semaphore = Swapchain_AcqSigSem(),
-		.deviceMask = 1,
-	};
-
-	VK_CHECK("acquire next image", vkAcquireNextImage2KHR(Device_Device(), &acq_info, &swapchain_image_index));
-
-	VkImage swapchain_image = Swapchain_Image(swapchain_image_index);
-
-	GraphicsTask_ChangeImageLayout(
-		final_image.image,
-		VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
-		VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, 0,
-		VK_PIPELINE_STAGE_2_BLIT_BIT, VK_ACCESS_2_TRANSFER_READ_BIT
-	);
-
-	GraphicsTask_ChangeImageLayout(
-		swapchain_image,
-		VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-		VK_PIPELINE_STAGE_2_BLIT_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT
-	);
-
-	const VkImageBlit2 regions[] = {
-		{
-			.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
-			.srcSubresource = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.layerCount = 1,
-			},
-			.srcOffsets = {{}, {.x = static_cast<int32_t>(Surface_Extent().width), .y = static_cast<int32_t>(Surface_Extent().height), .z = 1}},
-			.dstSubresource = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.layerCount = 1
-			},
-			.dstOffsets = {{}, {.x = static_cast<int32_t>(Surface_Extent().width), .y = static_cast<int32_t>(Surface_Extent().height), .z = 1}}
-		}
-	};
-
-	const VkBlitImageInfo2 blit_info = {
-		.sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
-		.srcImage = final_image.image,
-		.srcImageLayout = VK_IMAGE_LAYOUT_GENERAL,
-		.dstImage = swapchain_image,
-		.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-		.regionCount = _countof(regions),
-		.pRegions = regions,
-	};
-	vkCmdBlitImage2(Task_CommandBuffer(graphics_task), &blit_info);
-	GraphicsTask_ChangeImageLayout(
-		swapchain_image,
-		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-		VK_PIPELINE_STAGE_2_BLIT_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
-		VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 0
-	);
-
 	Task_End(graphics_task);
 }
 
@@ -225,11 +132,6 @@ void GraphicsTask_Submit()
 			.value = ComputeTask_SemaphoreValue(),
 			.stageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
 		},
-		{
-			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-			.semaphore = Swapchain_AcqSigSem(),
-			.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-		}
 	};
 
 	Task_Submit(graphics_task, wait_sem_infos, {});

@@ -10,7 +10,7 @@ void GraphicsTask_BeginGUIRenderPass(const Image& gui_target, const VkRect2D ren
 void GraphicsTask_RenderGUI();
 void GraphicsTask_EndGUIRenderPass();
 void GraphicsTask_EndRenderPass();
-void GraphicsTask_End(const Image& final_image);
+void GraphicsTask_End();
 void GraphicsTask_Submit();
 void GraphicsTask_Present();
 void GraphicsTask_NextFrame();

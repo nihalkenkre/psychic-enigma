@@ -59,12 +59,14 @@ void Renderer_Create(SDL_Window* window)
 	final_image = Allocator_CreateImage(
 		VK_FORMAT_R32G32B32A32_SFLOAT,
 		VkExtent3D{ .width = surface_extent.width, .height = surface_extent.height, .depth = 1 },
-		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
 		"final image"
 	);
 
 	GraphicsTask_Create(Swapchain_MaxFramesInFlight(), VkExtent3D{ .width = surface_extent.width, .height = surface_extent.height, .depth = 1 });
-	ComputeTask_Create({ color_target }, gui_target, final_image, Swapchain_MaxFramesInFlight());
+	ComputeTask_Create(Swapchain_MaxFramesInFlight());
+	ComputeTask_AddImages_Create({ color_target }, gui_target, final_image);
+	ComputeTask_CopyImageToSwapchain_Create();
 	TransferTask_Create(Swapchain_MaxFramesInFlight());
 }
 
@@ -84,7 +86,7 @@ static int GraphicsThread(void* ptr)
 		GraphicsTask_BeginGUIRenderPass(gui_target, VkRect2D{ .extent = Surface_Extent() });
 		GraphicsTask_RenderGUI();
 		GraphicsTask_EndGUIRenderPass();
-		GraphicsTask_End(final_image);
+		GraphicsTask_End();
 
 		SDL_LockMutex(graphics_mut);
 		GraphicsTask_Submit();
@@ -108,6 +110,7 @@ static int ComputeThread(void* ptr)
 	{
 		ComputeTask_Begin();
 		ComputeTask_AddImages();
+		ComputeTask_CopyImageToSwapchain(final_image.image);
 		ComputeTask_End();
 
 		SDL_LockMutex(compute_mut);
@@ -126,16 +129,16 @@ static int TransferThread(void* ptr)
 {
 	while (SDL_GetAtomicInt(&is_shutting_down) != 1)
 	{
-		TransferTask_Begin();
-		TransferTask_End();
+		//TransferTask_Begin();
+		//TransferTask_End();
 
-		SDL_LockMutex(transfer_mut);
-		TransferTask_Submit();
-		SDL_UnlockMutex(transfer_mut);
+		//SDL_LockMutex(transfer_mut);
+		//TransferTask_Submit();
+		//SDL_UnlockMutex(transfer_mut);
 
-		TransferTask_NextFrame();
+		//TransferTask_NextFrame();
 
-		SDL_Delay(16);
+		//SDL_Delay(16);
 	}
 
 	return 0;
