@@ -3,6 +3,7 @@
 #include <vector>
 #include <volk.h> 
 #include <string>
+#include "vulkan_objects.hpp"
 
 struct Task {
 	VkCommandPool command_pool;
@@ -22,6 +23,9 @@ VkCommandBuffer Task_CommandBuffer(const Task& task);
 VkSemaphore Task_Semaphore(const Task& task);
 uint64_t Task_SemaphoreValue(const Task& task);
 void Task_Begin(const Task& task);
+void Task_BeginRenderPass(const Task& task, const std::vector<Image>& color_targets, const VkRect2D render_area);
+void Task_EndRenderPass(const Task& task);
+void Task_BlitImageToSwapchain(const Task& task, const VkImage src_image, const VkImageLayout src_image_layout);
 void Task_ChangeImageLayout(
 	const Task& task,
 	VkImage image,
@@ -31,6 +35,7 @@ void Task_ChangeImageLayout(
 );
 void Task_End(const Task& task);
 void Task_Submit(Task& task, std::vector<VkSemaphoreSubmitInfo> wait_sem_infos, std::vector<VkSemaphoreSubmitInfo> sig_sem_infos);
+void Task_Present(const Task& task);
 void Task_NextFrame(Task& task);
 void Task_NextFrame(Task& task);
 void Task_Destroy(Task task);

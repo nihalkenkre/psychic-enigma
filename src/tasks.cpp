@@ -12,6 +12,8 @@ enum ETaskType {
 	Compute,
 };
 
+static uint32_t swapchain_image_index = 0;
+
 void Task_Create(Task& task, VkQueue queue, const uint32_t queue_family_index, const uint32_t max_frames_in_flight, const std::string& name)
 {
 	const VkSemaphoreTypeCreateInfo sem_type_ci = {
@@ -109,6 +111,118 @@ void Task_Begin(const Task& task)
 	VK_CHECK("start task", vkBeginCommandBuffer(Task_CommandBuffer(task), &begin_info));
 }
 
+void Task_BeginRenderPass(const Task& task, const std::vector<Image>& color_targets, const VkRect2D render_area)
+{
+	for (const auto& color_target : color_targets)
+	{
+		Task_ChangeImageLayout(
+			task,
+			color_target.image,
+			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
+			VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, 0,
+			VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT
+		);
+	}
+
+	const VkClearValue clear_value = {
+		.color = {
+			.float32 = {(float)rand() / RAND_MAX, (float)rand() / RAND_MAX, (float)rand() / RAND_MAX, 1},
+		}
+	};
+
+	std::vector<VkRenderingAttachmentInfo> color_attachments;
+
+	for (const auto& color_target : color_targets)
+	{
+		color_attachments.push_back({
+			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+			.imageView = color_target.image_view,
+			.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+			.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+			.clearValue = clear_value,
+			}
+			);
+	}
+
+	const VkRenderingInfo rendering_info = {
+		.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+		.renderArea = render_area,
+		.layerCount = 1,
+		.colorAttachmentCount = static_cast<uint32_t>(color_attachments.size()),
+		.pColorAttachments = color_attachments.data(),
+	};
+
+	vkCmdBeginRendering(Task_CommandBuffer(task), &rendering_info);
+}
+
+void Task_EndRenderPass(const Task& task)
+{
+	vkCmdEndRendering(Task_CommandBuffer(task));
+}
+
+void Task_BlitImageToSwapchain(const Task& task, const VkImage src_image, const VkImageLayout src_image_layout)
+{
+	const VkAcquireNextImageInfoKHR acq_info = {
+		.sType = VK_STRUCTURE_TYPE_ACQUIRE_NEXT_IMAGE_INFO_KHR,
+		.swapchain = Swapchain_Swapchain(),
+		.timeout = UINT64_MAX,
+		.semaphore = Swapchain_AcqSigSem(),
+		.deviceMask = 1,
+	};
+
+	VkResult result = vkAcquireNextImage2KHR(Device_Device(), &acq_info, &swapchain_image_index);
+
+	Task_ChangeImageLayout(
+		task, Swapchain_Image(swapchain_image_index),
+		VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
+		VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+		VK_PIPELINE_STAGE_2_BLIT_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT
+	);
+
+	const VkMemoryBarrier2 mem_barr = {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+		.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+		.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+		.dstStageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
+		.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT,
+	};
+
+	const VkDependencyInfo dep_info = {
+		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		.memoryBarrierCount = 1,
+		.pMemoryBarriers = &mem_barr,
+	};
+
+	vkCmdPipelineBarrier2(Task_CommandBuffer(task), &dep_info);
+
+	const VkImageBlit2 region = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
+		.srcSubresource = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.layerCount = 1,
+		},
+		.srcOffsets = {{}, {.x = static_cast<int32_t>(Surface_Extent().width), .y = static_cast<int32_t>(Surface_Extent().height), .z = 1}},
+		.dstSubresource = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.layerCount = 1,
+		},
+		.dstOffsets = {{}, {.x = static_cast<int32_t>(Surface_Extent().width), .y = static_cast<int32_t>(Surface_Extent().height), .z = 1}},
+	};
+
+	VkBlitImageInfo2 blit_image_info = {
+		.sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
+		.srcImage = src_image,
+		.srcImageLayout = src_image_layout,
+		.dstImage = Swapchain_Image(swapchain_image_index),
+		.dstImageLayout = VK_IMAGE_LAYOUT_GENERAL,
+		.regionCount = 1,
+		.pRegions = &region,
+	};
+
+	vkCmdBlitImage2(Task_CommandBuffer(task), &blit_image_info);
+}
+
 void Task_ChangeImageLayout(const Task& task, VkImage image, VkImageLayout old_layout, VkImageLayout new_layout, VkPipelineStageFlags2 src_stage_mask, VkAccessFlags2 src_access_mask, VkPipelineStageFlags2 dst_stage_mask, VkAccessFlags2 dst_access_mask)
 {
 	const VkImageMemoryBarrier2 img_mem_barrs[] = {
@@ -142,18 +256,34 @@ void Task_ChangeImageLayout(const Task& task, VkImage image, VkImageLayout old_l
 
 void Task_End(const Task& task)
 {
+	Task_ChangeImageLayout(
+		task, Swapchain_Image(swapchain_image_index),
+		VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+		VK_PIPELINE_STAGE_2_BLIT_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+		VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 0
+	);
+
 	VK_CHECK("end task", vkEndCommandBuffer(Task_CommandBuffer(task)));
 }
 
 void Task_Submit(Task& task, std::vector<VkSemaphoreSubmitInfo> wait_sem_infos, std::vector<VkSemaphoreSubmitInfo> sig_sem_infos)
 {
 	wait_sem_infos.push_back(
-		VkSemaphoreSubmitInfo{
+		{
 			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
 			.semaphore = Task_Semaphore(task),
 			.value = Task_SemaphoreValue(task),
 			.stageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-		});
+		}
+		);
+
+	wait_sem_infos.push_back(
+		{
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+			.semaphore = Swapchain_AcqSigSem(),
+			.stageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+		}
+		);
 
 	const VkCommandBufferSubmitInfo cmd_buff_infos[] = {
 		{
@@ -167,8 +297,16 @@ void Task_Submit(Task& task, std::vector<VkSemaphoreSubmitInfo> wait_sem_infos, 
 			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
 			.semaphore = Task_Semaphore(task),
 			.value = Task_SemaphoreValue(task) + 1,
-			.stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-		});
+			.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+		}
+		);
+	sig_sem_infos.push_back(
+		{
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+			.semaphore = Swapchain_PrsntWaitSem(),
+			.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+		}
+		);
 
 	const VkSubmitInfo2 submit_infos[] = {
 		{
@@ -183,6 +321,37 @@ void Task_Submit(Task& task, std::vector<VkSemaphoreSubmitInfo> wait_sem_infos, 
 	};
 
 	VK_CHECK("queue submit", vkQueueSubmit2(task.queue, _countof(submit_infos), submit_infos, VK_NULL_HANDLE));
+}
+
+void Task_Present(const Task& task)
+{
+	VkSemaphore semaphore = Task_Semaphore(task);
+	uint64_t semaphore_value = Task_SemaphoreValue(task);
+
+	const VkSemaphoreWaitInfo wait_info = {
+		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+		.semaphoreCount = 1,
+		.pSemaphores = &semaphore,
+		.pValues = &semaphore_value,
+	};
+
+	VK_CHECK("wait semaphores", vkWaitSemaphores(Device_Device(), &wait_info, UINT64_MAX));
+
+	VkSemaphore prsnt_wait_sem = Swapchain_PrsntWaitSem();
+	VkSwapchainKHR swapchain = Swapchain_Swapchain();
+
+	const VkPresentInfoKHR present_info = {
+		.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+		.waitSemaphoreCount = 1,
+		.pWaitSemaphores = &prsnt_wait_sem,
+		.swapchainCount = 1,
+		.pSwapchains = &swapchain,
+		.pImageIndices = &swapchain_image_index,
+	};
+
+	//printf("graphics present\n");
+	//printf("compute sem value: %lld graphics sem value: %lld\n", wait_semaphore_values[0], wait_semaphore_values[1]);
+	VK_CHECK("queue present", vkQueuePresentKHR(task.queue, &present_info));
 }
 
 void Task_NextFrame(Task& task)

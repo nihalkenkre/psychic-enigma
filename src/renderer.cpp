@@ -24,7 +24,6 @@ static SDL_Mutex* transfer_mut;
 
 static Renderer renderer = {};
 static Task renderer_task = {};
-static SDL_Mutex* renderer_task_mut;
 
 static Image color_target = {};
 static Image gui_target = {};
@@ -49,7 +48,7 @@ void Renderer_Create(SDL_Window* window)
 	color_target = Allocator_CreateImage(
 		VK_FORMAT_R32G32B32A32_SFLOAT,
 		VkExtent3D{ .width = surface_extent.width, .height = surface_extent.height, .depth = 1 },
-		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
 		"color target"
 	);
 	gui_target = Allocator_CreateImage(
@@ -73,7 +72,6 @@ void Renderer_Create(SDL_Window* window)
 	TransferTask_Create(Swapchain_MaxFramesInFlight());
 
 	Task_Create(renderer_task, Device_Graphics_Queue(), PhysicalDeviceData_GraphicsQueueFamilyIndex(), Swapchain_MaxFramesInFlight(), "renderer task");
-	renderer_task_mut = SDL_CreateMutex();
 }
 
 void Renderer_SetShuttingDown()
@@ -169,11 +167,13 @@ void Renderer_Event(SDL_Event* event)
 void Renderer_Render()
 {
 	Task_Begin(renderer_task);
+	Task_BeginRenderPass(renderer_task, { color_target }, VkRect2D{ .extent = Surface_Extent() });
+	Task_EndRenderPass(renderer_task);
+	Task_BlitImageToSwapchain(renderer_task, color_target.image, VK_IMAGE_LAYOUT_GENERAL);
 	Task_End(renderer_task);
 
-	SDL_LockMutex(renderer_task_mut);
 	Task_Submit(renderer_task, {}, {});
-	SDL_UnlockMutex(renderer_task_mut);
+	Task_Present(renderer_task);
 
 	Task_NextFrame(renderer_task);
 	Swapchain_NextFrame();
@@ -188,8 +188,6 @@ void Renderer_Destroy()
 	SDL_DestroyMutex(transfer_mut);
 	SDL_DestroyMutex(compute_mut);
 	SDL_DestroyMutex(graphics_mut);
-
-	SDL_DestroyMutex(renderer_task_mut);
 
 	VK_CHECK("wait device", vkDeviceWaitIdle(Device_Device()));
 
