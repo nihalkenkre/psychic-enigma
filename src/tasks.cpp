@@ -81,15 +81,12 @@ VkSemaphore Task_Semaphore(const Task& task)
 	return task.semaphores.at(task.current_frame);
 }
 
-uint64_t Task_SemaphoreValue(const Task& task)
+uint64_t& Task_SemaphoreValue(Task& task)
 {
-	uint64_t value = 0;
-
-	VK_CHECK("get semaphore counter value", vkGetSemaphoreCounterValue(Device_Device(), Task_Semaphore(task), &value));
-	return value;
+	return task.semaphore_values.at(task.current_frame);
 }
 
-void Task_Begin(const Task& task)
+void Task_Begin(Task& task)
 {
 	VkSemaphore semaphore = Task_Semaphore(task);
 	uint64_t value = Task_SemaphoreValue(task);
@@ -138,7 +135,7 @@ void Task_BeginRenderPass(const Task& task, const std::vector<Image>& color_targ
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 			.imageView = color_target.image_view,
 			.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-			.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 			.clearValue = clear_value,
 			}
@@ -176,7 +173,7 @@ void Task_BlitImageToSwapchain(const Task& task, const VkImage src_image, const 
 	Task_ChangeImageLayout(
 		task, Swapchain_Image(swapchain_image_index),
 		VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
-		VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+		VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT_KHR | VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
 		VK_PIPELINE_STAGE_2_BLIT_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT
 	);
 
@@ -260,7 +257,7 @@ void Task_End(const Task& task)
 		task, Swapchain_Image(swapchain_image_index),
 		VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 		VK_PIPELINE_STAGE_2_BLIT_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
-		VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, 0
+		VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 0
 	);
 
 	VK_CHECK("end task", vkEndCommandBuffer(Task_CommandBuffer(task)));
@@ -296,15 +293,15 @@ void Task_Submit(Task& task, std::vector<VkSemaphoreSubmitInfo> wait_sem_infos, 
 		{
 			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
 			.semaphore = Task_Semaphore(task),
-			.value = Task_SemaphoreValue(task) + 1,
-			.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+			.value = ++Task_SemaphoreValue(task),
+			.stageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
 		}
 		);
 	sig_sem_infos.push_back(
 		{
 			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
 			.semaphore = Swapchain_PrsntWaitSem(),
-			.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+			.stageMask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
 		}
 		);
 
@@ -323,7 +320,7 @@ void Task_Submit(Task& task, std::vector<VkSemaphoreSubmitInfo> wait_sem_infos, 
 	VK_CHECK("queue submit", vkQueueSubmit2(task.queue, _countof(submit_infos), submit_infos, VK_NULL_HANDLE));
 }
 
-void Task_Present(const Task& task)
+void Task_Present(Task& task)
 {
 	VkSemaphore semaphore = Task_Semaphore(task);
 	uint64_t semaphore_value = Task_SemaphoreValue(task);

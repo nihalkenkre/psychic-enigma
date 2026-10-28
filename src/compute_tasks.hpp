@@ -16,5 +16,5 @@ void ComputeTask_NextFrame();
 void ComputeTask_Destroy();
 
 VkSemaphore ComputeTask_Semaphore();
-uint64_t ComputeTask_SemaphoreValue();
+uint64_t& ComputeTask_SemaphoreValue();
 

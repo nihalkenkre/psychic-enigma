@@ -17,4 +17,4 @@ void GraphicsTask_NextFrame();
 void GraphicsTask_Destroy();
 
 VkSemaphore GraphicsTask_Semaphore();
-uint64_t GraphicsTask_SemaphoreValue();
+uint64_t& GraphicsTask_SemaphoreValue();

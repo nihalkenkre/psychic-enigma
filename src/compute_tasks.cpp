@@ -547,7 +547,7 @@ void ComputeTask_Submit()
 		{
 			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
 			.semaphore = ComputeTask_Semaphore(),
-			.value = ComputeTask_SemaphoreValue() + 1,
+			.value = ++ComputeTask_SemaphoreValue(),
 			.stageMask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
 		},
 		{
@@ -580,7 +580,7 @@ VkSemaphore ComputeTask_Semaphore()
 	return Task_Semaphore(compute_task);
 }
 
-uint64_t ComputeTask_SemaphoreValue()
+uint64_t& ComputeTask_SemaphoreValue()
 {
 	return Task_SemaphoreValue(compute_task);
 }

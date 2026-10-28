@@ -25,7 +25,7 @@ VkSemaphore GraphicsTask_Semaphore()
 	return Task_Semaphore(graphics_task);
 }
 
-uint64_t GraphicsTask_SemaphoreValue()
+uint64_t& GraphicsTask_SemaphoreValue()
 {
 	return Task_SemaphoreValue(graphics_task);
 }
