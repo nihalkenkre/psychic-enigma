@@ -42,6 +42,7 @@ struct AddImages {
 		//DescIndexing desc_indexing;
 	};
 };
+
 struct CopyImageToSwapchain {
 	struct PushConstantRange {
 		uint32_t image_width;

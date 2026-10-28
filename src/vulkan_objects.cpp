@@ -730,6 +730,49 @@ Image Allocator_CreateImage(const VkFormat format, const VkExtent3D& extent, con
 
 	VK_CHECK("create sampler", vkCreateSampler(device, &sampler_create_info, nullptr, &image.sampler));
 
+	if (descriptor_mode == EDescriptorMode::DescHeap)
+	{
+		VkPhysicalDeviceDescriptorHeapPropertiesEXT desc_heap_props = PhysicalDeviceData_DescHeapProps();
+		image.descriptor.resize(desc_heap_props.imageDescriptorSize);
+
+		const VkImageViewCreateInfo iv_ci = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			.image = image.image,
+			.viewType = VK_IMAGE_VIEW_TYPE_2D,
+			.format = format,
+			.subresourceRange = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.levelCount = 1,
+				.layerCount = 1
+			}
+		};
+
+		const VkImageDescriptorInfoEXT image_desc_info = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
+			.pView = &iv_ci,
+			.layout = VK_IMAGE_LAYOUT_GENERAL,
+		};
+
+		const VkResourceDescriptorInfoEXT resource_desc_info = {
+			.sType = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
+			.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			.data = {
+				.pImage = &image_desc_info
+			}
+		};
+
+		const VkHostAddressRangeEXT host_addr = {
+			.address = image.descriptor.data(),
+			.size = image.descriptor.size(),
+		};
+
+		VK_CHECK("writing heap desc", vkWriteResourceDescriptorsEXT(Device_Device(), 1, &resource_desc_info, &host_addr));
+	}
+	else if (descriptor_mode == EDescriptorMode::DescBuffer)
+	{
+
+	}
+
 #ifdef _DEBUG
 	Utils_SetObjectName(device, VK_OBJECT_TYPE_IMAGE, reinterpret_cast<uint64_t>(image.image), name + " image");
 	Utils_SetObjectName(device, VK_OBJECT_TYPE_IMAGE_VIEW, reinterpret_cast<uint64_t>(image.image_view), name + " image view");
@@ -771,14 +814,14 @@ Buffer Allocator_CreateBuffer(const VkDeviceSize size, const VkBufferUsageFlags 
 	};
 
 	const VmaAllocationCreateInfo allocation_create_info = {
-	    .flags = flags,
+		.flags = flags,
 		.usage = VMA_MEMORY_USAGE_AUTO,
 	};
 
 	VK_CHECK("create buffer", vmaCreateBuffer(allocator, &buffer_create_info, &allocation_create_info, &buffer.buffer, &buffer.allocation, &buffer.allocation_info.allocationInfo));
 
 	const VkBufferDeviceAddressInfo addr_info = {
-		.sType= VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+		.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
 		.buffer = buffer.buffer,
 	};
 

@@ -15,6 +15,7 @@ struct Image {
 	VkExtent3D extent;
 	VmaAllocation allocation;
 	VmaAllocationInfo2 allocation_info;
+	std::vector<uint8_t> descriptor;
 };
 
 struct Buffer {

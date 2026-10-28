@@ -19,12 +19,17 @@ struct Task {
 };
 
 void Task_Create(Task& task, VkQueue queue, const uint32_t queue_family_index, const uint32_t max_frames_in_flight, const std::string& name);
+void Task_AddImages_Create(const Task& task);
 VkCommandBuffer Task_CommandBuffer(const Task& task);
 VkSemaphore Task_Semaphore(const Task& task);
 uint64_t& Task_SemaphoreValue(Task& task);
 void Task_Begin(Task& task);
 void Task_BeginRenderPass(const Task& task, const std::vector<Image>& color_targets, const VkRect2D render_area);
 void Task_EndRenderPass(const Task& task);
+void Task_BeginGUIRenderPass(const Task& task, const Image& gui_target, const VkRect2D render_area);
+void Task_RenderGUI(const Task& task);
+void Task_EndGUIRenderPass(const Task& task);
+void Task_AddImages(const Task& task, const std::vector<Image>& image, const Image& gui_target, const Image& final_image);
 void Task_BlitImageToSwapchain(const Task& task, const VkImage src_image, const VkImageLayout src_image_layout);
 void Task_ChangeImageLayout(
 	const Task& task,
@@ -37,5 +42,6 @@ void Task_End(const Task& task);
 void Task_Submit(Task& task, std::vector<VkSemaphoreSubmitInfo> wait_sem_infos, std::vector<VkSemaphoreSubmitInfo> sig_sem_infos);
 void Task_Present(Task& task);
 void Task_NextFrame(Task& task);
+void Task_AddImages_Destroy();
 void Task_NextFrame(Task& task);
 void Task_Destroy(Task task);
