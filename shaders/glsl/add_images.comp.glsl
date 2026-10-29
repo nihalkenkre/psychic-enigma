@@ -31,3 +31,26 @@ void main()
 
     imageStore(images[pc.color_target_count + 1], uv_coord, color_target_color + gui_color);
 }
+
+// layout (set = 0, binding = 0, rgba32f) uniform image2D final_color;
+// layout (set = 0, binding = 1, rgba32f) uniform image2D gui_target;
+// layout (set = 0, binding = 2, rgba32f) uniform image2D color_targets[];
+
+// layout (local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
+// void main()
+// {
+//     ivec2 uv_coord = ivec2(gl_GlobalInvocationID.xy);
+
+//     if (uv_coord.x >= pc.image_width || uv_coord.y >= pc.image_height)
+//         return;
+    
+//     vec4 gui_color = srgb_to_linear(imageLoad(gui_target, uv_coord));
+//     vec4 color_target_color = vec4(0);
+
+//     for (uint i = 0; i < pc.color_target_count; ++i)
+//     {
+//         color_target_color += imageLoad(color_targets[i], uv_coord);
+//     }
+
+//     imageStore(final_color, uv_coord, color_target_color + gui_color);
+// }

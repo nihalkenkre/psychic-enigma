@@ -42,7 +42,7 @@ void GUI_Create(SDL_Window* window)
 	ImGui::GetIO().IniFilename = nullptr;
 	ImGui::GetIO().LogFilename = nullptr;
 
-	VkFormat color_attachment_format = VK_FORMAT_R32G32B32A32_SFLOAT;
+	VkFormat color_attachment_format = VK_FORMAT_R8G8B8A8_UNORM;
 	ImGui_ImplVulkan_InitInfo imgui_init_info = {
 		.Instance = Instance_Instance(),
 		.PhysicalDevice = PhysicalDeviceData_PhysicalDevice(),
@@ -68,8 +68,6 @@ void GUI_Create(SDL_Window* window)
 
 void GUI_Event(SDL_Event* event)
 {
-	ImGuiIO& io = ImGui::GetIO();
-
 	ImGui_ImplSDL3_ProcessEvent(event);
 }
 

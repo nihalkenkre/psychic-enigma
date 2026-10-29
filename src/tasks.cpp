@@ -297,6 +297,24 @@ void Task_EndGUIRenderPass(const Task& task)
 	vkCmdEndRendering(Task_CommandBuffer(task));
 }
 
+void Task_ExecutionBarrier(const Task& task, const VkPipelineStageFlags2 src_stage_mask, const VkAccessFlags2 src_access_mask, const VkPipelineStageFlags2 dst_stage_mask, const VkAccessFlags2 dst_access_mask)
+{
+	const VkMemoryBarrier2 mem_barr = {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+		.srcStageMask = src_stage_mask,
+		.srcAccessMask = src_access_mask,
+		.dstStageMask = dst_stage_mask,
+		.dstAccessMask = dst_access_mask,
+	};
+
+	const VkDependencyInfo dependency_info = {
+		.sType =VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		.memoryBarrierCount = 1,
+		.pMemoryBarriers = &mem_barr,
+	};
+	vkCmdPipelineBarrier2(Task_CommandBuffer(task), &dependency_info);
+}
+
 void Task_AddImages(const Task& task, const std::vector<Image>& color_targets, const Image& gui_target, const Image& final_image)
 {
 	VkDeviceSize offset = 0;
@@ -351,8 +369,27 @@ void Task_AddImages(const Task& task, const std::vector<Image>& color_targets, c
 		final_image.image,
 		VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL,
 		VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, 0,
-		VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT
+		VK_PIPELINE_STAGE_2_CLEAR_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT
 	);
+
+	const VkClearColorValue clear_color = {
+		.float32 = {0, 0, 0, 0}
+	};
+
+	const VkImageSubresourceRange range = {
+		.aspectMask= VK_IMAGE_ASPECT_COLOR_BIT,
+		.levelCount = 1,
+		.layerCount = 1
+	};
+
+	vkCmdClearColorImage(
+		Task_CommandBuffer(task),
+		final_image.image,
+		VK_IMAGE_LAYOUT_GENERAL, 
+		&clear_color, 1, &range
+	);
+
+	Task_ExecutionBarrier(task, VK_PIPELINE_STAGE_2_CLEAR_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, VK_ACCESS_2_SHADER_WRITE_BIT);
 
 	vkCmdBindPipeline(cmd_buff, VK_PIPELINE_BIND_POINT_COMPUTE, add_images.pipeline);
 	vkCmdBindResourceHeapEXT(cmd_buff, &bind_info);
