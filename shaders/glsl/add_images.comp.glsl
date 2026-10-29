@@ -1,12 +1,12 @@
 #version 460
 
-#extension GL_EXT_nonuniform_qualifier : require
 #extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_nonuniform_qualifier : require
 #extension GL_EXT_descriptor_heap : require
 
 #include "utils.glsl"
 
-layout(descriptor_heap, rgba32f) uniform image2D images[];
+layout(descriptor_heap, rgba8) uniform image2D images[];
 
 layout(push_constant) uniform PushConstant {
     uint image_width;
@@ -21,7 +21,7 @@ void main()
     if (uv_coord.x >= pc.image_width || uv_coord.y >= pc.image_height)
         return;
 
-    vec4 gui_color = imageLoad(images[pc.color_target_count], uv_coord);
+    vec4 gui_color = srgb_to_linear(imageLoad(images[pc.color_target_count], uv_coord));
     vec4 color_target_color = vec4(0);
 
     for (uint i = 0; i < pc.color_target_count; ++i)

@@ -263,7 +263,7 @@ void Task_BeginGUIRenderPass(const Task& task, const Image& gui_target, const Vk
 
 	const VkClearValue clear_value = {
 		.color = {
-			.float32 = {0,0,0,0},
+			.float32 = {0, 0, 0, 0},
 		}
 	};
 
@@ -297,10 +297,10 @@ void Task_EndGUIRenderPass(const Task& task)
 	vkCmdEndRendering(Task_CommandBuffer(task));
 }
 
-void Task_AddImages(const Task& task, const std::vector<Image>& images, const Image& gui_target, const Image& final_image)
+void Task_AddImages(const Task& task, const std::vector<Image>& color_targets, const Image& gui_target, const Image& final_image)
 {
 	VkDeviceSize offset = 0;
-	for (const Image image : images)
+	for (const Image image : color_targets)
 	{
 		memcpy(
 			reinterpret_cast<void*>(reinterpret_cast<uint64_t>(add_images.desc_heap.buffer.allocation_info.allocationInfo.pMappedData) + offset),
@@ -327,13 +327,13 @@ void Task_AddImages(const Task& task, const std::vector<Image>& images, const Im
 			.address = add_images.desc_heap.buffer.device_address,
 			.size = add_images.desc_heap.buffer.allocation_info.allocationInfo.size,
 		},
-		.reservedRangeSize = add_images.desc_heap.buffer.allocation_info.allocationInfo.size,
+		.reservedRangeSize = max(add_images.desc_heap.buffer.allocation_info.allocationInfo.size, PhysicalDeviceData_DescHeapProps().minResourceHeapReservedRange)
 	};
 
 	const AddImages::PushConstantRange pc = {
 		.image_width = Surface_Extent().width,
 		.image_height = Surface_Extent().height,
-		.image_count = static_cast<uint32_t>(images.size()) + 1 + 1,
+		.image_count = static_cast<uint32_t>(color_targets.size()),
 	};
 
 	const VkPushDataInfoEXT push_data = {
