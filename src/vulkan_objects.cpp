@@ -74,7 +74,6 @@ void Instance_Create()
 	vk_api_version = VK_API_VERSION_1_4;
 
 	std::vector<const char*> all_extensions;
-
 	for (uint32_t ec = 0; ec < extensions_count; ++ec)
 	{
 		all_extensions.push_back(extensions[ec]);
@@ -351,22 +350,24 @@ void Device_Create()
 		}
 	}
 
-#ifdef VK_EXT_descriptor_heap
-	if (Device_IsExtensionSupported(props, VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME))
-	{
-		req_ext_names.push_back(VK_KHR_SHADER_UNTYPED_POINTERS_EXTENSION_NAME);
-		req_ext_names.push_back(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME);
-		descriptor_mode = EDescriptorMode::DescHeap;
-	}
-#elifdef VK_EXT_descriptor_buffer
+	//if (Device_IsExtensionSupported(props, VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME))
+	//{
+	//	req_ext_names.push_back(VK_KHR_SHADER_UNTYPED_POINTERS_EXTENSION_NAME);
+	//	req_ext_names.push_back(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME);
+	//	descriptor_mode = EDescriptorMode::DescHeap;
+	//}
+
 	if (Device_IsExtensionSupported(props, VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME))
 	{
 		req_ext_names.push_back(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME);
 		descriptor_mode = EDescriptorMode::DescBuffer;
 	}
-#else
-	descriptor_mode = EDescriptorMode::DescIndex;
-#endif
+	else
+	{
+		descriptor_mode = EDescriptorMode::DescIndex;
+	}
+
+	descriptor_mode = EDescriptorMode::DescBuffer;
 
 	VkDeviceQueueCreateInfo q_ci = {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
@@ -548,7 +549,7 @@ void Swapchain_Create()
 		.imageColorSpace = surface_data.surface_format.surfaceFormat.colorSpace,
 		.imageExtent = surface_data.capabilities.surfaceCapabilities.currentExtent,
 		.imageArrayLayers = 1,
-		.imageUsage = surface_data.capabilities.surfaceCapabilities.supportedUsageFlags &~ VK_IMAGE_USAGE_STORAGE_BIT,
+		.imageUsage = surface_data.capabilities.surfaceCapabilities.supportedUsageFlags & ~VK_IMAGE_USAGE_STORAGE_BIT,
 		.queueFamilyIndexCount = 1,
 		.pQueueFamilyIndices = &physical_device_data.graphics_queue_family_index,
 		.preTransform = surface_data.capabilities.surfaceCapabilities.currentTransform,
@@ -691,7 +692,7 @@ Image Allocator_CreateImage(const VkFormat format, const VkExtent3D& extent, con
 {
 	const uint32_t queue_family_indices[] = { physical_device_data.graphics_queue_family_index, physical_device_data.compute_queue_family_index, physical_device_data.transfer_queue_family_index };
 
-	Image image = {};
+	Image image = { .extent = extent };
 
 	const VkImageCreateInfo image_create_info = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -732,7 +733,7 @@ Image Allocator_CreateImage(const VkFormat format, const VkExtent3D& extent, con
 
 	if (descriptor_mode == EDescriptorMode::DescHeap)
 	{
-		VkPhysicalDeviceDescriptorHeapPropertiesEXT desc_heap_props = PhysicalDeviceData_DescHeapProps();
+		const VkPhysicalDeviceDescriptorHeapPropertiesEXT desc_heap_props = PhysicalDeviceData_DescHeapProps();
 		image.descriptor.resize(desc_heap_props.imageDescriptorSize);
 
 		const VkImageViewCreateInfo iv_ci = {
@@ -766,11 +767,30 @@ Image Allocator_CreateImage(const VkFormat format, const VkExtent3D& extent, con
 			.size = image.descriptor.size(),
 		};
 
-		VK_CHECK("writing heap desc", vkWriteResourceDescriptorsEXT(Device_Device(), 1, &resource_desc_info, &host_addr));
+		VK_CHECK("writing heap desc", vkWriteResourceDescriptorsEXT(device, 1, &resource_desc_info, &host_addr));
 	}
 	else if (descriptor_mode == EDescriptorMode::DescBuffer)
 	{
+		const VkPhysicalDeviceDescriptorBufferPropertiesEXT desc_buff_props = PhysicalDeviceData_DescBufferProps();
+		image.descriptor.resize(desc_buff_props.storageImageDescriptorSize);
 
+		const VkDescriptorImageInfo image_info = {
+			.sampler = image.sampler,
+			.imageView = image.image_view,
+			.imageLayout = VK_IMAGE_LAYOUT_GENERAL
+		};
+
+		const VkDescriptorDataEXT data = {
+			.pStorageImage = &image_info,
+		};
+
+		const VkDescriptorGetInfoEXT desc_get_info = {
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
+			.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			.data = data
+		};
+
+		vkGetDescriptorEXT(device, &desc_get_info, desc_buff_props.storageImageDescriptorSize, image.descriptor.data());
 	}
 
 #ifdef _DEBUG
@@ -825,10 +845,10 @@ Buffer Allocator_CreateBuffer(const VkDeviceSize size, const VkBufferUsageFlags 
 		.buffer = buffer.buffer,
 	};
 
-	buffer.device_address = vkGetBufferDeviceAddress(Device_Device(), &addr_info);
+	buffer.device_address = vkGetBufferDeviceAddress(device, &addr_info);
 
 #ifdef _DEBUG
-	Utils_SetObjectName(Device_Device(), VK_OBJECT_TYPE_BUFFER, reinterpret_cast<uint64_t>(buffer.buffer), name + " buffer");
+	Utils_SetObjectName(device, VK_OBJECT_TYPE_BUFFER, reinterpret_cast<uint64_t>(buffer.buffer), name + " buffer");
 #endif
 
 	return buffer;

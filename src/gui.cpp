@@ -77,17 +77,11 @@ void GUI_Render(VkCommandBuffer cmd_buff)
 	ImGui_ImplSDL3_NewFrame();
 	ImGui::NewFrame();
 
-	//ImGui::ShowDemoWindow();
+	ImGui::ShowDemoWindow();
 
 	if (ImGui::BeginMainMenuBar())
 	{
-		if (ImGui::BeginMenu("Backend", "Ctrl+B"))
-		{
-			ImGui::MenuItem("Vulkan");
-			ImGui::MenuItem("DX12");
-			ImGui::EndMenu();
-		}
-
+		ImGui::Text("frame time: %.03f ms\n", 1000 / ImGui::GetIO().Framerate);
 		ImGui::EndMainMenuBar();
 	}
 
