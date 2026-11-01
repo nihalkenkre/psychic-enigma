@@ -1,10 +1,12 @@
 #include "gui.hpp"
 #include "vulkan_objects.hpp"
 #include "utils.hpp"
+#include "scene_graph.hpp"
 
 #include <volk.h>
 #include <imgui.h>
 #include <imgui_impl_vulkan.h>
+#include <imnodes.h>
 #include <imgui_impl_sdl3.h>
 #include <SDL3/SDL_vulkan.h>
 
@@ -42,6 +44,8 @@ void GUI_Create(SDL_Window* window)
 	ImGui::GetIO().IniFilename = nullptr;
 	ImGui::GetIO().LogFilename = nullptr;
 
+	ImNodes::CreateContext();
+
 	VkFormat color_attachment_format = VK_FORMAT_R8G8B8A8_UNORM;
 	ImGui_ImplVulkan_InitInfo imgui_init_info = {
 		.Instance = Instance_Instance(),
@@ -77,13 +81,21 @@ void GUI_Render(VkCommandBuffer cmd_buff)
 	ImGui_ImplSDL3_NewFrame();
 	ImGui::NewFrame();
 
-	ImGui::ShowDemoWindow();
-
 	if (ImGui::BeginMainMenuBar())
 	{
 		ImGui::Text("frame time: %.03f ms\n", 1000 / ImGui::GetIO().Framerate);
 		ImGui::EndMainMenuBar();
 	}
+
+	if (ImGui::Begin("Node Editor"))
+	{
+		ImNodes::BeginNodeEditor();
+
+		SceneGraph_Render();
+		ImNodes::EndNodeEditor();
+	}
+
+	ImGui::End();
 
 	ImGui::EndFrame();
 	ImGui::Render();
@@ -101,6 +113,7 @@ void GUI_Destroy()
 {
 	ImGui_ImplSDL3_Shutdown();
 	ImGui_ImplVulkan_Shutdown();
+	ImNodes::DestroyContext();
 	ImGui::DestroyContext();
 
 	if (descriptor_pool)
