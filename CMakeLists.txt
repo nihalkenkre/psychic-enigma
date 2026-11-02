@@ -12,6 +12,7 @@ file(GLOB VOLK_SRCS ../volk/volk.c)
 
 source_group("ImGui" FILES ${IMGUI_SRCS})
 source_group("ImGuiFileDialog" FILES ${IMGUI_FILE_DLG_SRCS})
+source_group("ImNodes", FILES ${IMNODES_SRCS})
 
 add_executable(${PROJECT_NAME} ${PROJECT_SRCS} ${IMGUI_SRCS} ${IMGUI_FILE_DLG_SRCS} ${IMNODES_SRCS} ${VOLK_SRCS})
 
