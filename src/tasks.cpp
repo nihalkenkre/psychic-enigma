@@ -683,7 +683,7 @@ void Task_Submit(Task& task, std::vector<VkSemaphoreSubmitInfo> wait_sem_infos, 
 		{
 			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
 			.semaphore = Swapchain_AcqSigSem(),
-			.stageMask = VK_PIPELINE_STAGE_2_BLIT_BIT,
+			.stageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
 		}
 		);
 

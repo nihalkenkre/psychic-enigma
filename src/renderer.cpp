@@ -101,6 +101,7 @@ void Renderer_OnWindowResized()
 	VK_CHECK("wait semaphores", vkWaitSemaphores(Device_Device(), wait_infos, UINT64_MAX));
 
 	Swapchain_Destroy();
+	Surface_PopulateData();
 	Swapchain_Create();
 
 	Allocator_DestroyImage(depth_image);
@@ -110,6 +111,31 @@ void Renderer_OnWindowResized()
 		VkExtent3D{ .width = surface_extent.width, .height = surface_extent.height, .depth = 1 },
 		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
 		"depth image"
+	);
+
+	Allocator_DestroyImage(color_target);
+	surface_extent = Surface_Extent();
+	color_target = Allocator_CreateImage(
+		VK_FORMAT_R8G8B8A8_UNORM,
+		VkExtent3D{ .width = surface_extent.width, .height = surface_extent.height, .depth = 1 },
+		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+		"color target"
+	);
+
+	Allocator_DestroyImage(gui_target);
+	gui_target = Allocator_CreateImage(
+		VK_FORMAT_R8G8B8A8_UNORM,
+		VkExtent3D{ .width = surface_extent.width, .height = surface_extent.height, .depth = 1 },
+		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+		"gui target"
+	);
+
+	Allocator_DestroyImage(final_image);
+	final_image = Allocator_CreateImage(
+		VK_FORMAT_R8G8B8A8_UNORM,
+		VkExtent3D{ .width = surface_extent.width, .height = surface_extent.height, .depth = 1 },
+		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+		"final image"
 	);
 }
 
