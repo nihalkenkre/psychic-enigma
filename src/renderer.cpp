@@ -28,6 +28,7 @@ static Task renderer_task = {};
 static Image color_target = {};
 static Image gui_target = {};
 static Image final_image = {};
+static Image depth_image = {};
 static VkExtent2D surface_extent = {};
 
 void Renderer_Create(SDL_Window* window)
@@ -63,6 +64,13 @@ void Renderer_Create(SDL_Window* window)
 		VkExtent3D{ .width = surface_extent.width, .height = surface_extent.height, .depth = 1 },
 		VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
 		"final image"
+	);
+
+	depth_image = Allocator_CreateImage(
+		VK_FORMAT_D32_SFLOAT,
+		VkExtent3D{ .width = surface_extent.width, .height = surface_extent.height, .depth = 1 },
+		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+		"depth image"
 	);
 
 	Task_Create(renderer_task, Device_Graphics_Queue(), PhysicalDeviceData_GraphicsQueueFamilyIndex(), Swapchain_MaxFramesInFlight(), "renderer task");
@@ -162,9 +170,9 @@ void Renderer_Event(SDL_Event* event)
 void Renderer_Render()
 {
 	Task_Begin(renderer_task);
-	Task_BeginRenderPass(renderer_task, { color_target }, VkRect2D{ .extent = Surface_Extent() });
+	Task_BeginRenderPass(renderer_task, { color_target }, depth_image, VkRect2D{ .extent = Surface_Extent() });
 	Task_EndRenderPass(renderer_task);
-	Task_BeginGUIRenderPass(renderer_task, gui_target, VkRect2D{ .extent = Surface_Extent() });
+	Task_BeginGUIRenderPass(renderer_task, gui_target, depth_image, VkRect2D{ .extent = Surface_Extent() });
 	Task_RenderGUI(renderer_task);
 	Task_EndGUIRenderPass(renderer_task);
 	Task_AddImages(renderer_task, {color_target}, gui_target, final_image);
@@ -190,6 +198,7 @@ void Renderer_Destroy()
 
 	VK_CHECK("wait device", vkDeviceWaitIdle(Device_Device()));
 
+	Allocator_DestroyImage(depth_image);
 	Allocator_DestroyImage(final_image);
 	Allocator_DestroyImage(gui_target);
 	Allocator_DestroyImage(color_target);

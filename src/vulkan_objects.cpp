@@ -711,13 +711,26 @@ Image Allocator_CreateImage(const VkFormat format, const VkExtent3D& extent, con
 
 	VK_CHECK("create image", vmaCreateImage(allocator, &image_create_info, &allocation_create_info, &image.image, &image.allocation, &image.allocation_info.allocationInfo));
 
+	VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+
+	if (
+		format == VK_FORMAT_D32_SFLOAT ||
+		format == VK_FORMAT_D32_SFLOAT_S8_UINT ||
+		format == VK_FORMAT_D24_UNORM_S8_UINT ||
+		format == VK_FORMAT_D16_UNORM ||
+		format == VK_FORMAT_D16_UNORM_S8_UINT
+		)
+	{
+		aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+	}
+
 	const VkImageViewCreateInfo image_view_create_info = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 		.image = image.image,
 		.viewType = VK_IMAGE_VIEW_TYPE_2D,
 		.format = format,
 		.subresourceRange = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.aspectMask = aspect,
 			.levelCount = 1,
 			.layerCount = 1
 		},
@@ -731,66 +744,75 @@ Image Allocator_CreateImage(const VkFormat format, const VkExtent3D& extent, con
 
 	VK_CHECK("create sampler", vkCreateSampler(device, &sampler_create_info, nullptr, &image.sampler));
 
-	if (descriptor_mode == EDescriptorMode::DescHeap)
+	if (
+		format != VK_FORMAT_D32_SFLOAT &&
+		format != VK_FORMAT_D32_SFLOAT_S8_UINT &&
+		format != VK_FORMAT_D24_UNORM_S8_UINT &&
+		format != VK_FORMAT_D16_UNORM &&
+		format != VK_FORMAT_D16_UNORM_S8_UINT
+		)
 	{
-		const VkPhysicalDeviceDescriptorHeapPropertiesEXT desc_heap_props = PhysicalDeviceData_DescHeapProps();
-		image.descriptor.resize(desc_heap_props.imageDescriptorSize);
+		if (descriptor_mode == EDescriptorMode::DescHeap)
+		{
+			const VkPhysicalDeviceDescriptorHeapPropertiesEXT desc_heap_props = PhysicalDeviceData_DescHeapProps();
+			image.descriptor.resize(desc_heap_props.imageDescriptorSize);
 
-		const VkImageViewCreateInfo iv_ci = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-			.image = image.image,
-			.viewType = VK_IMAGE_VIEW_TYPE_2D,
-			.format = format,
-			.subresourceRange = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.levelCount = 1,
-				.layerCount = 1
-			}
-		};
+			const VkImageViewCreateInfo iv_ci = {
+				.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+				.image = image.image,
+				.viewType = VK_IMAGE_VIEW_TYPE_2D,
+				.format = format,
+				.subresourceRange = {
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.levelCount = 1,
+					.layerCount = 1
+				}
+			};
 
-		const VkImageDescriptorInfoEXT image_desc_info = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
-			.pView = &iv_ci,
-			.layout = VK_IMAGE_LAYOUT_GENERAL,
-		};
+			const VkImageDescriptorInfoEXT image_desc_info = {
+				.sType = VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
+				.pView = &iv_ci,
+				.layout = VK_IMAGE_LAYOUT_GENERAL,
+			};
 
-		const VkResourceDescriptorInfoEXT resource_desc_info = {
-			.sType = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
-			.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-			.data = {
-				.pImage = &image_desc_info
-			}
-		};
+			const VkResourceDescriptorInfoEXT resource_desc_info = {
+				.sType = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
+				.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+				.data = {
+					.pImage = &image_desc_info
+				}
+			};
 
-		const VkHostAddressRangeEXT host_addr = {
-			.address = image.descriptor.data(),
-			.size = image.descriptor.size(),
-		};
+			const VkHostAddressRangeEXT host_addr = {
+				.address = image.descriptor.data(),
+				.size = image.descriptor.size(),
+			};
 
-		VK_CHECK("writing heap desc", vkWriteResourceDescriptorsEXT(device, 1, &resource_desc_info, &host_addr));
-	}
-	else if (descriptor_mode == EDescriptorMode::DescBuffer)
-	{
-		const VkPhysicalDeviceDescriptorBufferPropertiesEXT desc_buff_props = PhysicalDeviceData_DescBufferProps();
-		image.descriptor.resize(desc_buff_props.storageImageDescriptorSize);
+			VK_CHECK("writing heap desc", vkWriteResourceDescriptorsEXT(device, 1, &resource_desc_info, &host_addr));
+		}
+		else if (descriptor_mode == EDescriptorMode::DescBuffer)
+		{
+			const VkPhysicalDeviceDescriptorBufferPropertiesEXT desc_buff_props = PhysicalDeviceData_DescBufferProps();
+			image.descriptor.resize(desc_buff_props.storageImageDescriptorSize);
 
-		const VkDescriptorImageInfo image_info = {
-			.sampler = image.sampler,
-			.imageView = image.image_view,
-			.imageLayout = VK_IMAGE_LAYOUT_GENERAL
-		};
+			const VkDescriptorImageInfo image_info = {
+				.sampler = image.sampler,
+				.imageView = image.image_view,
+				.imageLayout = VK_IMAGE_LAYOUT_GENERAL
+			};
 
-		const VkDescriptorDataEXT data = {
-			.pStorageImage = &image_info,
-		};
+			const VkDescriptorDataEXT data = {
+				.pStorageImage = &image_info,
+			};
 
-		const VkDescriptorGetInfoEXT desc_get_info = {
-			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
-			.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-			.data = data
-		};
+			const VkDescriptorGetInfoEXT desc_get_info = {
+				.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT,
+				.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+				.data = data
+			};
 
-		vkGetDescriptorEXT(device, &desc_get_info, desc_buff_props.storageImageDescriptorSize, image.descriptor.data());
+			vkGetDescriptorEXT(device, &desc_get_info, desc_buff_props.storageImageDescriptorSize, image.descriptor.data());
+		}
 	}
 
 #ifdef _DEBUG

@@ -286,7 +286,7 @@ void Task_Begin(Task& task)
 	VK_CHECK("start task", vkBeginCommandBuffer(Task_CommandBuffer(task), &begin_info));
 }
 
-void Task_BeginRenderPass(const Task& task, const std::vector<Image>& color_targets, const VkRect2D render_area)
+void Task_BeginRenderPass(const Task& task, const std::vector<Image>& color_targets, const Image& depth_target, const VkRect2D render_area)
 {
 	for (const auto& color_target : color_targets)
 	{
@@ -299,7 +299,15 @@ void Task_BeginRenderPass(const Task& task, const std::vector<Image>& color_targ
 		);
 	}
 
-	const VkClearValue clear_value = {
+	Task_ChangeImageLayout(
+		task,
+		depth_target.image,
+		VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+		VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, 0,
+		VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
+	);
+
+	const VkClearValue color_clear_value = {
 		.color = {
 			.float32 = {(float)rand() / RAND_MAX, (float)rand() / RAND_MAX, (float)rand() / RAND_MAX, 1},
 		}
@@ -316,10 +324,25 @@ void Task_BeginRenderPass(const Task& task, const std::vector<Image>& color_targ
 				.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
 				.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-				.clearValue = clear_value,
+				.clearValue = color_clear_value,
 			}
 			);
 	}
+
+	const VkClearValue depth_clear_value = {
+		.depthStencil = {
+			.depth = 0.f,
+		}
+	};
+
+	const VkRenderingAttachmentInfo depth_attachment = {
+		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+		.imageView = depth_target.image_view,
+		.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+		.clearValue = depth_clear_value,
+	};
 
 	const VkRenderingInfo rendering_info = {
 		.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
@@ -327,6 +350,7 @@ void Task_BeginRenderPass(const Task& task, const std::vector<Image>& color_targ
 		.layerCount = 1,
 		.colorAttachmentCount = static_cast<uint32_t>(color_attachments.size()),
 		.pColorAttachments = color_attachments.data(),
+		.pDepthAttachment = &depth_attachment,
 	};
 
 	vkCmdBeginRendering(Task_CommandBuffer(task), &rendering_info);
@@ -337,7 +361,7 @@ void Task_EndRenderPass(const Task& task)
 	vkCmdEndRendering(Task_CommandBuffer(task));
 }
 
-void Task_BeginGUIRenderPass(const Task& task, const Image& gui_target, const VkRect2D render_area)
+void Task_BeginGUIRenderPass(const Task& task, const Image& gui_target, const Image& depth_target, const VkRect2D render_area)
 {
 	Task_ChangeImageLayout(
 		task,
@@ -522,7 +546,7 @@ void Task_AddImages(const Task& task, const std::vector<Image>& color_targets, c
 		VkDeviceSize offsets[1] = { 0 };
 
 		vkCmdSetDescriptorBufferOffsetsEXT(
-			cmd_buff, VK_PIPELINE_BIND_POINT_COMPUTE, add_images.desc_buffer.pipeline_layout, 
+			cmd_buff, VK_PIPELINE_BIND_POINT_COMPUTE, add_images.desc_buffer.pipeline_layout,
 			0, 1,
 			buffers, offsets
 		);
@@ -596,6 +620,13 @@ void Task_BlitImageToSwapchain(const Task& task, const VkImage src_image, const 
 
 void Task_ChangeImageLayout(const Task& task, VkImage image, VkImageLayout old_layout, VkImageLayout new_layout, VkPipelineStageFlags2 src_stage_mask, VkAccessFlags2 src_access_mask, VkPipelineStageFlags2 dst_stage_mask, VkAccessFlags2 dst_access_mask)
 {
+	VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+
+	if (new_layout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL)
+	{
+		aspect = VK_IMAGE_ASPECT_DEPTH_BIT;
+	}
+
 	const VkImageMemoryBarrier2 img_mem_barrs[] = {
 		{
 			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -609,7 +640,7 @@ void Task_ChangeImageLayout(const Task& task, VkImage image, VkImageLayout old_l
 			.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
 			.image = image,
 			.subresourceRange = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.aspectMask = aspect,
 			.levelCount = 1,
 			.layerCount = 1,
 		},
