@@ -97,7 +97,7 @@ void GUI_Render(VkCommandBuffer cmd_buff)
 		ImNodes::BeginNodeEditor();
 
 		SceneGraph_Render();
-		printf("%d %d\n", ImNodes::IsEditorHovered(), ImGui::IsMouseClicked(ImGuiMouseButton_Right));
+
 		if (ImNodes::IsEditorHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
 		{
 			ImGui::OpenPopup("NodesTypes");
@@ -109,7 +109,6 @@ void GUI_Render(VkCommandBuffer cmd_buff)
 			{
 				SceneGraph_AddBasicShapeNode(ImGui::GetMousePos());
 			}
-
 			ImGui::EndPopup();
 		}
 		ImNodes::EndNodeEditor();

@@ -35,6 +35,11 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event)
 		return SDL_APP_CONTINUE;
 	}
 
+	if (event->type == SDL_EVENT_WINDOW_RESIZED)
+	{
+		printf("resized\n");
+	}
+
 	App_Event(event);
 
 	return SDL_APP_CONTINUE;
