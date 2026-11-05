@@ -77,6 +77,42 @@ void Renderer_Create(SDL_Window* window)
 	Task_AddImages_Create(renderer_task);
 }
 
+void Renderer_OnWindowResized()
+{
+	VK_CHECK("device wait idle", vkDeviceWaitIdle(Device_Device()));
+
+	const VkSemaphore semaphores[] = {
+		Task_Semaphore(renderer_task),
+	};
+
+	const uint64_t values[] = {
+		Task_SemaphoreValue(renderer_task),
+	};
+
+	const VkSemaphoreWaitInfo wait_infos[] = {
+		{
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+			.semaphoreCount = _countof(semaphores),
+			.pSemaphores = semaphores,
+			.pValues = values,
+		}
+	};
+
+	VK_CHECK("wait semaphores", vkWaitSemaphores(Device_Device(), wait_infos, UINT64_MAX));
+
+	Swapchain_Destroy();
+	Swapchain_Create();
+
+	Allocator_DestroyImage(depth_image);
+	surface_extent = Surface_Extent();
+	depth_image = Allocator_CreateImage(
+		VK_FORMAT_D32_SFLOAT,
+		VkExtent3D{ .width = surface_extent.width, .height = surface_extent.height, .depth = 1 },
+		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+		"depth image"
+	);
+}
+
 void Renderer_SetShuttingDown()
 {
 	SDL_SetAtomicInt(&is_shutting_down, 1);
@@ -175,7 +211,7 @@ void Renderer_Render()
 	Task_BeginGUIRenderPass(renderer_task, gui_target, depth_image, VkRect2D{ .extent = Surface_Extent() });
 	Task_RenderGUI(renderer_task);
 	Task_EndGUIRenderPass(renderer_task);
-	Task_AddImages(renderer_task, {color_target}, gui_target, final_image);
+	Task_AddImages(renderer_task, { color_target }, gui_target, final_image);
 	Task_BlitImageToSwapchain(renderer_task, final_image.image, VK_IMAGE_LAYOUT_GENERAL);
 	Task_End(renderer_task);
 
