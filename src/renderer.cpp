@@ -234,7 +234,7 @@ void Renderer_Render()
 	Task_Begin(renderer_task);
 	Task_BeginRenderPass(renderer_task, { color_target }, depth_image, VkRect2D{ .extent = Surface_Extent() });
 	Task_EndRenderPass(renderer_task);
-	Task_BeginGUIRenderPass(renderer_task, gui_target, depth_image, VkRect2D{ .extent = Surface_Extent() });
+	Task_BeginGUIRenderPass(renderer_task, gui_target, VkRect2D{ .extent = Surface_Extent() });
 	Task_RenderGUI(renderer_task);
 	Task_EndGUIRenderPass(renderer_task);
 	Task_AddImages(renderer_task, { color_target }, gui_target, final_image);

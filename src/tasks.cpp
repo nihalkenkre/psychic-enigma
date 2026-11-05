@@ -361,7 +361,7 @@ void Task_EndRenderPass(const Task& task)
 	vkCmdEndRendering(Task_CommandBuffer(task));
 }
 
-void Task_BeginGUIRenderPass(const Task& task, const Image& gui_target, const Image& depth_target, const VkRect2D render_area)
+void Task_BeginGUIRenderPass(const Task& task, const Image& gui_target, const VkRect2D render_area)
 {
 	Task_ChangeImageLayout(
 		task,
