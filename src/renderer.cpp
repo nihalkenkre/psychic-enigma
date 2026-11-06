@@ -10,6 +10,8 @@
 #include <cstdio>
 #include <ctime>
 
+#include "scene_graph.hpp"
+
 struct Renderer {
 	float value;
 };
@@ -233,6 +235,7 @@ void Renderer_Render()
 {
 	Task_Begin(renderer_task);
 	Task_BeginRenderPass(renderer_task, { color_target }, depth_image, VkRect2D{ .extent = Surface_Extent() });
+	Task_RenderSceneGraph(renderer_task);
 	Task_EndRenderPass(renderer_task);
 	Task_BeginGUIRenderPass(renderer_task, gui_target, VkRect2D{ .extent = Surface_Extent() });
 	Task_RenderGUI(renderer_task);

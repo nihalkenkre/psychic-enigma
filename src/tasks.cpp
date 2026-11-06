@@ -2,6 +2,7 @@
 #include "utils.hpp"
 #include "vulkan_objects.hpp"
 #include "gui.hpp"
+#include "scene_graph.hpp"
 
 #include <volk.h>
 #include <vector>
@@ -354,6 +355,11 @@ void Task_BeginRenderPass(const Task& task, const std::vector<Image>& color_targ
 	};
 
 	vkCmdBeginRendering(Task_CommandBuffer(task), &rendering_info);
+}
+
+void Task_RenderSceneGraph(const Task& task)
+{
+	SceneGraph_Render(Task_CommandBuffer(task));
 }
 
 void Task_EndRenderPass(const Task& task)

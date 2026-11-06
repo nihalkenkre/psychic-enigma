@@ -25,6 +25,7 @@ VkSemaphore Task_Semaphore(const Task& task);
 uint64_t& Task_SemaphoreValue(Task& task);
 void Task_Begin(Task& task);
 void Task_BeginRenderPass(const Task& task, const std::vector<Image>& color_targets, const Image& depth_target, const VkRect2D render_area);
+	void Task_RenderSceneGraph(const Task& task);
 void Task_EndRenderPass(const Task& task);
 void Task_BeginGUIRenderPass(const Task& task, const Image& gui_target, const VkRect2D render_area);
 void Task_RenderGUI(const Task& task);

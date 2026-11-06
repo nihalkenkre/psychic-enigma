@@ -9,12 +9,16 @@ file(GLOB IMGUI_SRCS ../imgui/*.cpp ../imgui/*.h ../imgui/backends/imgui_impl_sd
 file(GLOB IMGUI_FILE_DLG_SRCS ../ImGuiFileDialog/ImGuiFileDialog*.h ../ImGuiFileDialog/ImGuiFileDialog*.cpp)
 file(GLOB IMNODES_SRCS ../imnodes/imnodes.h ../imnodes/imnodes_internal.h ../imnodes/imnodes.cpp)
 file(GLOB VOLK_SRCS ../volk/volk.c)
+file(GLOB GLSL_SRCS shaders/glsl/*)
+file(GLOB BUILD_SRCS build_glsl.py)
 
 source_group("ImGui" FILES ${IMGUI_SRCS})
 source_group("ImGuiFileDialog" FILES ${IMGUI_FILE_DLG_SRCS})
 source_group("ImNodes", FILES ${IMNODES_SRCS})
+source_group("Shaders/GLSL", FILES ${GLSL_SRCS})
+source_group("Build", FILES ${BUILD_SRCS})
 
-add_executable(${PROJECT_NAME} ${PROJECT_SRCS} ${IMGUI_SRCS} ${IMGUI_FILE_DLG_SRCS} ${IMNODES_SRCS} ${VOLK_SRCS})
+add_executable(${PROJECT_NAME} ${PROJECT_SRCS} ${IMGUI_SRCS} ${IMGUI_FILE_DLG_SRCS} ${IMNODES_SRCS} ${VOLK_SRCS} ${GLSL_SRCS} ${BUILD_SRCS})
 
 add_compile_definitions(SDL_MAIN_USE_CALLBACKS _HAS_EXCEPTION=0 _CRT_SECURE_NO_WARNINGS VK_NO_PROTOTYPES IMGUI_IMPL_VULKAN_USE_VOLK)
 

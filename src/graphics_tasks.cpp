@@ -53,14 +53,16 @@ void GraphicsTask_BeginRenderPass(const std::vector<Image>& color_targets, const
 
 	for (const auto& color_target : color_targets)
 	{
-		color_attachments.push_back({
+		color_attachments.push_back(
+			{
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 			.imageView = color_target.image_view,
 			.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
 			.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
 			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 			.clearValue = clear_value,
-			});
+			}
+		);
 	}
 
 	const VkRenderingInfo rendering_info = {
