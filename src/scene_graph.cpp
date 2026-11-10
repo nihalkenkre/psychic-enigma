@@ -37,10 +37,12 @@ struct BasicShapeNode
 	};
 };
 
-static std::vector<BasicShapeNode> basic_shape_nodes;
-static std::pair<int, int> links;
+namespace {
+	std::vector<BasicShapeNode> basic_shape_nodes;
+	std::pair<int, int> links;
 
-static int imnodes_id = 0;
+	int imnodes_id = 0;
+}
 
 void SceneGraph_Create()
 {

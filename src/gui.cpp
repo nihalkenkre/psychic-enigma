@@ -10,11 +10,14 @@
 #include <imgui_impl_sdl3.h>
 #include <SDL3/SDL_vulkan.h>
 
-static const char* node_types[] = {
-	"Basic Shapes",
-};
 
-static VkDescriptorPool descriptor_pool = VK_NULL_HANDLE;
+namespace {
+	const char* node_types[] = {
+		"Basic Shapes",
+	};
+
+	VkDescriptorPool descriptor_pool = VK_NULL_HANDLE;
+}
 
 void GUI_Create(SDL_Window* window)
 {

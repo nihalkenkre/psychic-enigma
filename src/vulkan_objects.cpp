@@ -36,28 +36,30 @@ struct SwapchainData {
 	uint32_t current_frame_in_flight;
 };
 
-static VkInstance instance = VK_NULL_HANDLE;
-static uint32_t vk_api_version = 0;
-static PhysicalDeviceData physical_device_data = {
-.props = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,},
-.mem_props = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2,},
-.desc_heap_props = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT,} ,
-.desc_buff_props = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT, }
-};
-static SurfaceeData surface_data = {
-.capabilities = {
-.sType = VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR,
-} };
+namespace {
+	VkInstance instance = VK_NULL_HANDLE;
+	uint32_t vk_api_version = 0;
+	PhysicalDeviceData physical_device_data = {
+	.props = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,},
+	.mem_props = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2,},
+	.desc_heap_props = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT,} ,
+	.desc_buff_props = {.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT, }
+	};
+	SurfaceeData surface_data = {
+	.capabilities = {
+	.sType = VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_2_KHR,
+	} };
 
-static VkDevice device = VK_NULL_HANDLE;
-static VkQueue graphics_queue = VK_NULL_HANDLE;
-static VkQueue compute_queue = VK_NULL_HANDLE;
-static VkQueue transfer_queue = VK_NULL_HANDLE;
+	VkDevice device = VK_NULL_HANDLE;
+	VkQueue graphics_queue = VK_NULL_HANDLE;
+	VkQueue compute_queue = VK_NULL_HANDLE;
+	VkQueue transfer_queue = VK_NULL_HANDLE;
 
-static SwapchainData swapchain_data = {};
-static VmaAllocator allocator = VK_NULL_HANDLE;
+	SwapchainData swapchain_data = {};
+	VmaAllocator allocator = VK_NULL_HANDLE;
 
-constexpr uint32_t EXTRA_FRAMES_IN_FLIGHT = 2;
+	constexpr uint32_t EXTRA_FRAMES_IN_FLIGHT = 2;
+}
 
 void Instance_Create()
 {
@@ -74,6 +76,7 @@ void Instance_Create()
 	vk_api_version = VK_API_VERSION_1_4;
 
 	std::vector<const char*> all_extensions;
+	all_extensions.reserve(extensions_count);
 	for (uint32_t ec = 0; ec < extensions_count; ++ec)
 	{
 		all_extensions.push_back(extensions[ec]);
@@ -331,6 +334,9 @@ void Device_Create()
 	std::vector<const char*> req_ext_names = {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 		VK_EXT_ROBUSTNESS_2_EXTENSION_NAME,
+#ifdef _DEBUG
+		VK_KHR_SHADER_RELAXED_EXTENDED_INSTRUCTION_EXTENSION_NAME	
+#endif
 	};
 
 	uint32_t property_count = 0;
@@ -409,7 +415,7 @@ void Device_Create()
 		priorities[d_q_ci_idx].resize(d_q_ci.queueCount, 1.f);
 		d_q_ci.pQueuePriorities = priorities[d_q_ci_idx].data();
 	}
-
+	
 	VkPhysicalDeviceShaderUntypedPointersFeaturesKHR shdr_ut_feats = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_UNTYPED_POINTERS_FEATURES_KHR,
 	};
@@ -422,17 +428,30 @@ void Device_Create()
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT,
 	};
 
+	
+#ifdef _DEBUG
+	VkPhysicalDeviceShaderRelaxedExtendedInstructionFeaturesKHR shdr_rlx_ext_inst_feats = {
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_RELAXED_EXTENDED_INSTRUCTION_FEATURES_KHR,
+	};
+#endif
+
 	VkPhysicalDeviceDynamicRenderingFeatures dyn_rend_feats = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
 	};
-
+	
 	if (descriptor_mode == EDescriptorMode::DescHeap)
 	{
+#ifdef _DEBUG
+		shdr_ut_feats.pNext = &shdr_rlx_ext_inst_feats;
+#endif
 		desc_heap_feats.pNext = &shdr_ut_feats;
 		dyn_rend_feats.pNext = &desc_heap_feats;
 	}
 	else if (descriptor_mode == EDescriptorMode::DescBuffer)
 	{
+#ifdef _DEBUG
+		desc_buffer_feats.pNext = &shdr_rlx_ext_inst_feats;
+#endif
 		dyn_rend_feats.pNext = &desc_buffer_feats;
 	}
 	else if (descriptor_mode == EDescriptorMode::DescIndex)
@@ -558,7 +577,7 @@ void Swapchain_Create()
 		.oldSwapchain = VK_NULL_HANDLE,
 	};
 
-	swapchain_data.max_frames_in_flight = create_info.minImageCount;
+	swapchain_data.max_frames_in_flight = create_info.minImageCount + EXTRA_FRAMES_IN_FLIGHT;
 
 	VK_CHECK("create swapchain", vkCreateSwapchainKHR(device, &create_info, nullptr, &swapchain_data.swapchain));
 	VK_CHECK("get swapchain images", vkGetSwapchainImagesKHR(device, swapchain_data.swapchain, &swapchain_data.image_count, nullptr));

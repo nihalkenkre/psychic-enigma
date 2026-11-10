@@ -4,7 +4,9 @@
 struct App {
 };
 
-static App app;
+namespace {
+	App app;
+}
 
 void App_Create(SDL_Window* window)
 {

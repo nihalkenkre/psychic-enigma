@@ -16,22 +16,24 @@ struct Renderer {
 	float value;
 };
 
-static SDL_AtomicInt is_shutting_down = SDL_AtomicInt(0);
-static SDL_Thread* graphics_th;
-static SDL_Mutex* graphics_mut;
-static SDL_Thread* compute_th;
-static SDL_Mutex* compute_mut;
-static SDL_Thread* transfer_th;
-static SDL_Mutex* transfer_mut;
+namespace {
+	SDL_AtomicInt is_shutting_down = SDL_AtomicInt(0);
+	SDL_Thread* graphics_th;
+	SDL_Mutex* graphics_mut;
+	SDL_Thread* compute_th;
+	SDL_Mutex* compute_mut;
+	SDL_Thread* transfer_th;
+	SDL_Mutex* transfer_mut;
 
-static Renderer renderer = {};
-static Task renderer_task = {};
+	Renderer renderer = {};
+	Task renderer_task = {};
 
-static Image color_target = {};
-static Image gui_target = {};
-static Image final_image = {};
-static Image depth_image = {};
-static VkExtent2D surface_extent = {};
+	Image color_target = {};
+	Image gui_target = {};
+	Image final_image = {};
+	Image depth_image = {};
+	VkExtent2D surface_extent = {};
+}
 
 void Renderer_Create(SDL_Window* window)
 {
@@ -76,7 +78,8 @@ void Renderer_Create(SDL_Window* window)
 	);
 
 	Task_Create(renderer_task, Device_Graphics_Queue(), PhysicalDeviceData_GraphicsQueueFamilyIndex(), Swapchain_MaxFramesInFlight(), "renderer task");
-	Task_AddImages_Create(renderer_task);
+	Task_BasicShapesNode_Create();
+	Task_AddImages_Create();
 }
 
 void Renderer_OnWindowResized()
@@ -269,6 +272,7 @@ void Renderer_Destroy()
 	Allocator_DestroyImage(color_target);
 
 	Task_AddImages_Destroy();
+	Task_BasicShapesNode_Destroy();
 	Task_Destroy(renderer_task);
 
 	GUI_Destroy();

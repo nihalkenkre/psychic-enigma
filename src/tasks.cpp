@@ -50,16 +50,44 @@ struct AddImages {
 		DescBuffer desc_buffer;
 		//DescIndexing desc_indexing;
 	};
+	
+	uint8_t max_color_targets = 10;
 };
 
-static AddImages add_images = {};
-static uint32_t swapchain_image_index = 0;
+struct BasicShapesNode
+{
+	struct PushConstantRange {
+		VkDeviceAddress position_data_ptr;
+		VkDeviceAddress vertices_data_ptr;
+		VkDeviceAddress triangles_data_ptr;
+		uint32_t triangle_count;
+	};
+
+	VkPipeline pipeline;
+
+	struct DescBuffer {
+		Buffer buffer;
+		VkPipelineLayout pipeline_layout;
+	};
+
+	union {
+		DescBuffer desc_buffer;
+	};
+
+	Buffer mesh_data_buffer;
+};
+
+namespace {
+	AddImages add_images = {};
+	BasicShapesNode basic_shapes_node = {};
+	uint32_t swapchain_image_index = 0;
+}
 
 void Task_Create(Task& task, VkQueue queue, const uint32_t queue_family_index, const uint32_t max_frames_in_flight, const std::string& name)
 {
 	VkDevice device = Device_Device();
 
-	const VkSemaphoreTypeCreateInfo sem_type_ci = {
+	constexpr VkSemaphoreTypeCreateInfo sem_type_ci = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
 		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 		.initialValue = 0,
@@ -114,16 +142,92 @@ void Task_Create(Task& task, VkQueue queue, const uint32_t queue_family_index, c
 	}
 }
 
-void Task_AddImages_Create(const Task& task)
+void Task_BasicShapesNode_Create()
 {
-	VkDevice device = Device_Device();
+	const VkDevice device = Device_Device();
 	VkShaderModule shader_module = VK_NULL_HANDLE;
 
-	std::string shader_path = std::string(SDL_GetBasePath()).append("shaders\\glsl\\add_images.comp.glsl.spv");
+	const std::string shader_path = std::string(SDL_GetBasePath()).append("shaders\\glsl\\basic_shapes_node.comp.glsl.spv");
 
 	SDL_IOStream* io_stream = SDL_IOFromFile(shader_path.c_str(), "rb");
 	size_t code_size = 0;
-	uint32_t* code = reinterpret_cast<uint32_t*>(SDL_LoadFile_IO(io_stream, &code_size, true));
+	uint32_t* code = static_cast<uint32_t*>(SDL_LoadFile_IO(io_stream, &code_size, true));
+
+	const VkShaderModuleCreateInfo create_info = {
+		.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+		.codeSize = static_cast<size_t>(code_size),
+		.pCode = code,
+	};
+
+	VK_CHECK("create basic shapes node shader module", vkCreateShaderModule(device, &create_info, nullptr, &shader_module));
+	SDL_free(code);
+
+	const VkPipelineShaderStageCreateInfo stage_create_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+		.module = shader_module,
+		.pName = "main",
+	};
+
+	VkPipelineCreateFlags2CreateInfo pipeline_create_flags = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO
+	};
+
+	VkComputePipelineCreateInfo pipeline_create_info = {
+		.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+		.stage = stage_create_info,
+	};
+
+	if (descriptor_mode == EDescriptorMode::DescHeap)
+	{
+
+	}
+	else if (descriptor_mode == EDescriptorMode::DescBuffer)
+	{
+		constexpr VkPushConstantRange pc_rng = {
+			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+			.size = sizeof(BasicShapesNode::PushConstantRange),
+		};
+		
+		const VkPipelineLayoutCreateInfo pl_ci = {
+			.sType =  VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+			.pushConstantRangeCount = 1,
+			.pPushConstantRanges = &pc_rng,
+		};
+
+		VK_CHECK("create basic nodes shape pipeline layout", vkCreatePipelineLayout(device, &pl_ci, nullptr, &basic_shapes_node.desc_buffer.pipeline_layout));
+#ifdef _DEBUG
+		Utils_SetObjectName(device, VK_OBJECT_TYPE_PIPELINE_LAYOUT, reinterpret_cast<uint64_t>(basic_shapes_node.desc_buffer.pipeline_layout), "BasicShapesNode pipeline layout");
+#endif
+		
+		pipeline_create_flags.flags = VK_PIPELINE_CREATE_2_DESCRIPTOR_BUFFER_BIT_EXT;
+		pipeline_create_info.pNext = &pipeline_create_flags;
+		pipeline_create_info.layout = basic_shapes_node.desc_buffer.pipeline_layout;
+		
+		VK_CHECK("create basic shapes node pipeline", vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipeline_create_info, nullptr, &basic_shapes_node.pipeline));
+	}
+	else if (descriptor_mode == EDescriptorMode::DescIndex)
+	{
+
+	}
+	
+	vkDestroyShaderModule(device, shader_module, nullptr);
+	
+#ifdef _DEBUG
+	Utils_SetObjectName(device, VK_OBJECT_TYPE_PIPELINE, reinterpret_cast<uint64_t>(basic_shapes_node.pipeline), "BasicShapesNode pipeline");
+#endif
+}
+
+void Task_AddImages_Create()
+{
+	const VkDevice device = Device_Device();
+	VkShaderModule shader_module = VK_NULL_HANDLE;
+
+	const std::string shader_path = std::string(SDL_GetBasePath()).append("shaders\\glsl\\add_images.comp.glsl.spv");
+
+	SDL_IOStream* io_stream = SDL_IOFromFile(shader_path.c_str(), "rb");
+	size_t code_size = 0;
+	uint32_t* code = static_cast<uint32_t*>(SDL_LoadFile_IO(io_stream, &code_size, true));
 
 	const VkShaderModuleCreateInfo create_info = {
 		.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
@@ -155,7 +259,7 @@ void Task_AddImages_Create(const Task& task)
 		VkPhysicalDeviceDescriptorHeapPropertiesEXT desc_heap_props = PhysicalDeviceData_DescHeapProps();
 		VkDeviceSize desc_size = ALIGNED_SIZE(desc_heap_props.imageDescriptorSize, desc_heap_props.imageDescriptorAlignment);
 		VkDeviceSize total_heap_size = max(
-			ALIGNED_SIZE(desc_heap_props.imageDescriptorSize, desc_heap_props.imageDescriptorAlignment) * 10,
+			ALIGNED_SIZE(desc_heap_props.imageDescriptorSize, desc_heap_props.imageDescriptorAlignment) * add_images.max_color_targets,
 			desc_heap_props.minResourceHeapReservedRange
 		);
 
@@ -167,6 +271,10 @@ void Task_AddImages_Create(const Task& task)
 
 		pipeline_create_flags.flags = VK_PIPELINE_CREATE_2_DESCRIPTOR_HEAP_BIT_EXT;
 		pipeline_create_info.pNext = &pipeline_create_flags;
+
+		VK_CHECK("create AddImages pipeline", vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipeline_create_info, nullptr, &add_images.pipeline));
+
+
 	}
 	else if (descriptor_mode == EDescriptorMode::DescBuffer)
 	{
@@ -186,12 +294,12 @@ void Task_AddImages_Create(const Task& task)
 				{
 					.binding = 2,
 					.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-					.descriptorCount = 10,
+					.descriptorCount = add_images.max_color_targets,
 					.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
 				},
 		};
 
-		const VkDescriptorBindingFlags binding_flags[] = { 0, 0, VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT };
+		constexpr VkDescriptorBindingFlags binding_flags[] = { 0, 0, VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT };
 
 		const VkDescriptorSetLayoutBindingFlagsCreateInfo dsl_bf_ci = {
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
@@ -209,7 +317,7 @@ void Task_AddImages_Create(const Task& task)
 
 		VK_CHECK("create add images desc set layout", vkCreateDescriptorSetLayout(device, &dsl_ci, nullptr, &add_images.desc_buffer.desc_set_layout));
 
-		const VkPushConstantRange pc_rng = {
+		constexpr VkPushConstantRange pc_rng = {
 			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
 			.size = sizeof(AddImages::PushConstantRange)
 		};
@@ -243,11 +351,18 @@ void Task_AddImages_Create(const Task& task)
 			desc_set_layout_size,
 			VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT,
 			VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-			"desc buffer"
+			"AddImages desc buffer"
 		);
+#ifdef _DEBUG
+	Utils_SetObjectName(device, VK_OBJECT_TYPE_PIPELINE_LAYOUT, reinterpret_cast<uint64_t>(add_images.desc_buffer.pipeline_layout), "AddImages pipeline layout");
+#endif
 	}
 
 	vkDestroyShaderModule(device, shader_module, nullptr);
+	
+#ifdef _DEBUG
+	Utils_SetObjectName(device, VK_OBJECT_TYPE_PIPELINE, reinterpret_cast<uint64_t>(add_images.pipeline), "AddImages pipeline");
+#endif
 }
 
 VkCommandBuffer Task_CommandBuffer(const Task& task)
@@ -279,7 +394,7 @@ void Task_Begin(Task& task)
 
 	VK_CHECK("wait semaphores", vkWaitSemaphores(Device_Device(), &wait_info, UINT64_MAX));
 
-	const VkCommandBufferBeginInfo begin_info = {
+	constexpr VkCommandBufferBeginInfo begin_info = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
 	};
@@ -315,7 +430,8 @@ void Task_BeginRenderPass(const Task& task, const std::vector<Image>& color_targ
 	};
 
 	std::vector<VkRenderingAttachmentInfo> color_attachments;
-
+	color_attachments.reserve(color_targets.size());
+	
 	for (const auto& color_target : color_targets)
 	{
 		color_attachments.push_back(
@@ -330,7 +446,7 @@ void Task_BeginRenderPass(const Task& task, const std::vector<Image>& color_targ
 			);
 	}
 
-	const VkClearValue depth_clear_value = {
+	constexpr VkClearValue depth_clear_value = {
 		.depthStencil = {
 			.depth = 0.f,
 		}
@@ -377,7 +493,7 @@ void Task_BeginGUIRenderPass(const Task& task, const Image& gui_target, const Vk
 		VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT
 	);
 
-	const VkClearValue clear_value = {
+	constexpr VkClearValue clear_value = {
 		.color = {
 			.float32 = {0, 0, 0, 0},
 		}
@@ -443,11 +559,11 @@ void Task_AddImages(const Task& task, const std::vector<Image>& color_targets, c
 		VK_PIPELINE_STAGE_2_CLEAR_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT
 	);
 
-	const VkClearColorValue clear_color = {
+	constexpr VkClearColorValue clear_color = {
 		.float32 = {0, 0, 0, 0}
 	};
 
-	const VkImageSubresourceRange range = {
+	constexpr VkImageSubresourceRange range = {
 		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 		.levelCount = 1,
 		.layerCount = 1
@@ -473,7 +589,7 @@ void Task_AddImages(const Task& task, const std::vector<Image>& color_targets, c
 	if (descriptor_mode == EDescriptorMode::DescHeap)
 	{
 		VkDeviceSize offset = 0;
-		for (const Image image : color_targets)
+		for (const Image& image : color_targets)
 		{
 			memcpy(
 				reinterpret_cast<void*>(reinterpret_cast<uint64_t>(add_images.desc_heap.buffer.allocation_info.allocationInfo.pMappedData) + offset),
@@ -757,8 +873,6 @@ void Task_Present(Task& task)
 		.pImageIndices = &swapchain_image_index,
 	};
 
-	//printf("graphics present\n");
-	//printf("compute sem value: %lld graphics sem value: %lld\n", wait_semaphore_values[0], wait_semaphore_values[1]);
 	VK_CHECK("queue present", vkQueuePresentKHR(task.queue, &present_info));
 }
 
@@ -767,9 +881,26 @@ void Task_NextFrame(Task& task)
 	task.current_frame = (task.current_frame + 1) % task.max_frames_in_flight;
 }
 
+void Task_BasicShapesNode_Destroy()
+{
+	const VkDevice device = Device_Device();
+	
+	if (descriptor_mode == EDescriptorMode::DescHeap)
+	{
+	}
+	else if (descriptor_mode == EDescriptorMode::DescBuffer)
+	{
+		Allocator_DestroyBuffer(basic_shapes_node.desc_buffer.buffer);
+		Allocator_DestroyBuffer(basic_shapes_node.mesh_data_buffer);
+
+		vkDestroyPipelineLayout(device, basic_shapes_node.desc_buffer.pipeline_layout, nullptr);
+		vkDestroyPipeline(device, basic_shapes_node.pipeline, nullptr);
+	}
+}
+
 void Task_AddImages_Destroy()
 {
-	VkDevice device = Device_Device();
+	const VkDevice device = Device_Device();
 
 	if (descriptor_mode == EDescriptorMode::DescHeap)
 	{
@@ -786,7 +917,7 @@ void Task_AddImages_Destroy()
 	vkDestroyPipeline(device, add_images.pipeline, nullptr);
 }
 
-void Task_Destroy(Task task)
+void Task_Destroy(const Task& task)
 {
 	if (Device_Device() != VK_NULL_HANDLE)
 	{
