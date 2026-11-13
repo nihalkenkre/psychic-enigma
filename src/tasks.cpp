@@ -62,8 +62,16 @@ struct BasicShapesNode
 		VkDeviceAddress triangles_data_ptr;
 		uint32_t triangle_count;
 	};
+	
+	struct CubeData	{
+	};
+	
+	struct SphereData {
+	};
 
-	VkPipeline pipeline;
+	VkPipeline compute_pipeline;
+	VkPipeline graphics_pipeline;
+	VkPipelineLayout graphics_pipeline_layout;
 
 	struct DescBuffer {
 		Buffer buffer;
@@ -73,8 +81,10 @@ struct BasicShapesNode
 	union {
 		DescBuffer desc_buffer;
 	};
-
-	Buffer mesh_data_buffer;
+	
+	// positions, vertices(normals, tangents, uvs), indices
+	Buffer cube_buffer;
+	Buffer sphere_buffer;
 };
 
 namespace {
@@ -142,6 +152,62 @@ void Task_Create(Task& task, VkQueue queue, const uint32_t queue_family_index, c
 	}
 }
 
+VkShaderModule Task_ShaderModule_Create(const std::string& shader_path)
+{
+	const VkDevice device = Device_Device();
+	VkShaderModule shader_module = VK_NULL_HANDLE;
+	
+	const std::string full_shader_path = std::string(SDL_GetBasePath()).append(shader_path);
+	
+	SDL_IOStream* io_stream = SDL_IOFromFile(full_shader_path.c_str(), "rb");
+	size_t code_size = 0;
+	uint32_t* code = static_cast<uint32_t*>(SDL_LoadFile_IO(io_stream, &code_size, true));
+	
+	const VkShaderModuleCreateInfo create_info = {
+		.sType =  VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+		.codeSize = code_size,
+		.pCode = code,
+	};
+	
+	VK_CHECK("create shader module", vkCreateShaderModule(device, &create_info, nullptr, &shader_module));
+	SDL_free(code);
+	
+	return shader_module;
+}
+
+void Task_BasicShapeNodesGraphicsPipeline_Create()
+{
+	VkShaderModule vertex_shader = Task_ShaderModule_Create("shaders\\glsl\\basic_shapes_node.vert.glsl.spv");	
+	VkShaderModule fragment_shader = Task_ShaderModule_Create("shaders\\glsl\\basic_shapes_node.frag.glsl.spv");	
+
+	VkDevice device = Device_Device();
+	
+	vkDestroyShaderModule(device, vertex_shader, nullptr);
+	vkDestroyShaderModule(device, fragment_shader, nullptr);
+
+	const VkPipelineLayoutCreateInfo gfx_pl_ci = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+	};
+
+	VK_CHECK("create basic shapes node graphics pipeline layout", vkCreatePipelineLayout(device, &gfx_pl_ci, nullptr, &basic_shapes_node.graphics_pipeline_layout));
+
+	const VkGraphicsPipelineCreateInfo gfx_p_ci = {
+		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		.layout = basic_shapes_node.graphics_pipeline_layout,
+	};
+	
+	VK_CHECK("create basic shapes node graphics pipeline", vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &gfx_p_ci, nullptr, &basic_shapes_node.graphics_pipeline));
+}
+
+void Task_BasicShapeNodesComputePipeline_Create()
+{
+	VkShaderModule compute_shader = Task_ShaderModule_Create("shaders\\glsl\\basic_shapes_node.comp.glsl.spv");
+
+	VkDevice device = Device_Device();
+
+	vkDestroyShaderModule(device, compute_shader, nullptr);
+}
+
 void Task_BasicShapesNode_Create()
 {
 	const VkDevice device = Device_Device();
@@ -204,7 +270,7 @@ void Task_BasicShapesNode_Create()
 		pipeline_create_info.pNext = &pipeline_create_flags;
 		pipeline_create_info.layout = basic_shapes_node.desc_buffer.pipeline_layout;
 		
-		VK_CHECK("create basic shapes node pipeline", vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipeline_create_info, nullptr, &basic_shapes_node.pipeline));
+		VK_CHECK("create basic shapes node pipeline", vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipeline_create_info, nullptr, &basic_shapes_node.compute_pipeline));
 	}
 	else if (descriptor_mode == EDescriptorMode::DescIndex)
 	{
@@ -214,7 +280,7 @@ void Task_BasicShapesNode_Create()
 	vkDestroyShaderModule(device, shader_module, nullptr);
 	
 #ifdef _DEBUG
-	Utils_SetObjectName(device, VK_OBJECT_TYPE_PIPELINE, reinterpret_cast<uint64_t>(basic_shapes_node.pipeline), "BasicShapesNode pipeline");
+	Utils_SetObjectName(device, VK_OBJECT_TYPE_PIPELINE, reinterpret_cast<uint64_t>(basic_shapes_node.compute_pipeline), "BasicShapesNode pipeline");
 #endif
 }
 
@@ -273,8 +339,6 @@ void Task_AddImages_Create()
 		pipeline_create_info.pNext = &pipeline_create_flags;
 
 		VK_CHECK("create AddImages pipeline", vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipeline_create_info, nullptr, &add_images.pipeline));
-
-
 	}
 	else if (descriptor_mode == EDescriptorMode::DescBuffer)
 	{
@@ -891,10 +955,11 @@ void Task_BasicShapesNode_Destroy()
 	else if (descriptor_mode == EDescriptorMode::DescBuffer)
 	{
 		Allocator_DestroyBuffer(basic_shapes_node.desc_buffer.buffer);
-		Allocator_DestroyBuffer(basic_shapes_node.mesh_data_buffer);
+		Allocator_DestroyBuffer(basic_shapes_node.cube_buffer);
+		Allocator_DestroyBuffer(basic_shapes_node.sphere_buffer);
 
 		vkDestroyPipelineLayout(device, basic_shapes_node.desc_buffer.pipeline_layout, nullptr);
-		vkDestroyPipeline(device, basic_shapes_node.pipeline, nullptr);
+		vkDestroyPipeline(device, basic_shapes_node.compute_pipeline, nullptr);
 	}
 }
 

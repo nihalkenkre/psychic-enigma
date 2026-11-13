@@ -6,17 +6,17 @@
 
 #include "utils.glsl"
 
-layout(buffer_reference, buffer_reference_align=8) readonly buffer PositionData {
+layout(buffer_reference, std430) readonly buffer PositionData {
     vec3 position;
 };
 
-layout(buffer_reference, buffer_reference_align=8) readonly buffer VertexData {
+layout(buffer_reference, std430) readonly buffer VertexData {
     vec3 normal;
     vec3 tangent;
     vec2 uv0;
 };
 
-layout(buffer_reference, buffer_reference_align=8) readonly buffer TriangleData {
+layout(buffer_reference, std430) readonly buffer TriangleData {
     uvec3 indices;
 };
 

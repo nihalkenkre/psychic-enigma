@@ -48,6 +48,7 @@ def main(args):
     delete_spv(remote_shader_path)
     copy_spv(local_shader_path, remote_shader_path)
     delete_spv(local_shader_path)
+    print('Shaders Done')
 
 
 if __name__ == '__main__':

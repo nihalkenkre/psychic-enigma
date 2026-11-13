@@ -32,7 +32,7 @@ endif()
 set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 23)
 set_property(TARGET ${PROJECT_NAME} PROPERTY C_STANDARD 17)
 
-target_include_directories(${PROJECT_NAME} PRIVATE ../SDL/include ../imgui ../imgui/backends ../imnodes ../ImGuiFileDialog ../glm ../cglm/include ../cgltf ../stb src/ ../Vulkan-Headers/build/install/include ../volk ../vma/include)
+target_include_directories(${PROJECT_NAME} PRIVATE ../SDL/include ../imgui ../imgui/backends ../imnodes ../ImGuiFileDialog ../glm ../cgltf ../stb src/ ../Vulkan-Headers/build/install/include ../volk ../vma/include)
 
 target_link_directories(${PROJECT_NAME} PRIVATE $<IF:$<CONFIG:Debug>,${CMAKE_SOURCE_DIR}/../SDL/build/Debug,> $<IF:$<CONFIG:MinSizeRel>,${CMAKE_SOURCE_DIR}/../SDL/build/MinSizeRel,>)
 target_link_libraries(${PROJECT_NAME} PRIVATE SDL3-static winmm imm32 setupapi version)
