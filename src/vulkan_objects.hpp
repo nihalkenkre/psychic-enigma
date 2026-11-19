@@ -67,3 +67,6 @@ void Allocator_DestroyImage(Image image);
 Buffer Allocator_CreateBuffer(const VkDeviceSize size, const VkBufferUsageFlags usage, const VmaAllocationCreateFlags flags, const std::string& name);
 void Allocator_DestroyBuffer(Buffer buffer);
 void Allocator_Destroy();
+
+VkShaderModule ShaderModule_Create(const std::string& path);
+

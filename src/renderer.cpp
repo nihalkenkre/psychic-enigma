@@ -78,7 +78,6 @@ void Renderer_Create(SDL_Window* window)
 	);
 
 	Task_Create(renderer_task, Device_Graphics_Queue(), PhysicalDeviceData_GraphicsQueueFamilyIndex(), Swapchain_MaxFramesInFlight(), "renderer task");
-	Task_BasicShapesNode_Create();
 	Task_AddImages_Create();
 }
 
@@ -272,7 +271,6 @@ void Renderer_Destroy()
 	Allocator_DestroyImage(color_target);
 
 	Task_AddImages_Destroy();
-	Task_BasicShapesNode_Destroy();
 	Task_Destroy(renderer_task);
 
 	GUI_Destroy();

@@ -908,3 +908,24 @@ void Allocator_Destroy()
 	vmaDestroyAllocator(allocator);
 }
 
+VkShaderModule ShaderModule_Create(const std::string& path)
+{
+	VkShaderModule shader_module = VK_NULL_HANDLE;
+	
+	const std::string full_shader_path = std::string(SDL_GetBasePath()).append(path);
+	
+	SDL_IOStream* io_stream = SDL_IOFromFile(full_shader_path.c_str(), "rb");
+	size_t code_size = 0;
+	uint32_t* code = static_cast<uint32_t*>(SDL_LoadFile_IO(io_stream, &code_size, true));
+	
+	const VkShaderModuleCreateInfo create_info = {
+		.sType =  VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+		.codeSize = code_size,
+		.pCode = code,
+	};
+	
+	VK_CHECK("create shader module", vkCreateShaderModule(device, &create_info, nullptr, &shader_module));
+	SDL_free(code);
+	
+	return shader_module;
+}
