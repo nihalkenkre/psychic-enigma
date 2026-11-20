@@ -273,6 +273,8 @@ void Renderer_Destroy()
 	Task_AddImages_Destroy();
 	Task_Destroy(renderer_task);
 
+	SceneGraph_Destroy();
+
 	GUI_Destroy();
 	Allocator_Destroy();
 	Swapchain_Destroy();
