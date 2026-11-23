@@ -21,41 +21,40 @@ namespace
 	struct CubeData
 	{
 		std::vector<Vertex> vertices = {
-			Vertex{.position = {-0.5f, -0.5f,  0.5f}, .normal = { 0.0f,  0.0f,  1.0f}, .uv_0 = {0.0f, 0.0f}},
-			Vertex{.position = { 0.5f, -0.5f,  0.5f}, .normal = { 0.0f,  0.0f,  1.0f}, .uv_0 = {1.0f, 0.0f}},
-			Vertex{.position = { 0.5f,  0.5f,  0.5f}, .normal = { 0.0f,  0.0f,  1.0f}, .uv_0 = {1.0f, 1.0f}},
-			Vertex{.position = {-0.5f,  0.5f,  0.5f}, .normal = { 0.0f,  0.0f,  1.0f}, .uv_0 = {0.0f, 1.0f}},
-			
-			Vertex {.position = { 0.5f, -0.5f, -0.5f}, .normal = { 0.0f,  0.0f, -1.0f}, .uv_0 = {0.0f, 0.0f}},
-			Vertex {.position = {-0.5f, -0.5f, -0.5f}, .normal = { 0.0f,  0.0f, -1.0f}, .uv_0 = {1.0f, 0.0f}},
-			Vertex {.position = {-0.5f,  0.5f, -0.5f}, .normal = { 0.0f,  0.0f, -1.0f}, .uv_0 = {1.0f, 1.0f}},
-			Vertex {.position = { 0.5f,  0.5f, -0.5f}, .normal = { 0.0f,  0.0f, -1.0f}, .uv_0 = {0.0f, 1.0f}},
-			
-			Vertex {.position = {-0.5f, -0.5f, -0.5f},.normal = {-1.0f,  0.0f,  0.0f},.uv_0 = {0.0f, 0.0f}},
-			Vertex {.position = {-0.5f, -0.5f,  0.5f},.normal = {-1.0f,  0.0f,  0.0f},.uv_0 = {1.0f, 0.0f}},
-			Vertex {.position = {-0.5f,  0.5f,  0.5f},.normal = {-1.0f,  0.0f,  0.0f},.uv_0 = {1.0f, 1.0f}},
-			Vertex {.position = {-0.5f,  0.5f, -0.5f},.normal = {-1.0f,  0.0f,  0.0f},.uv_0 = {0.0f, 1.0f}},
-			
-			Vertex {.position = { 0.5f, -0.5f,  0.5f}, .normal = { 1.0f,  0.0f,  0.0f}, .uv_0 = {0.0f, 0.0f}},
-			Vertex {.position = { 0.5f, -0.5f, -0.5f}, .normal = { 1.0f,  0.0f,  0.0f}, .uv_0 = {1.0f, 0.0f}},
-			Vertex {.position = { 0.5f,  0.5f, -0.5f}, .normal = { 1.0f,  0.0f,  0.0f}, .uv_0 = {1.0f, 1.0f}},
-			Vertex {.position = { 0.5f,  0.5f,  0.5f}, .normal = { 1.0f,  0.0f,  0.0f}, .uv_0 = {0.0f, 1.0f}},
-			
-			Vertex{.position = {-0.5f,  0.5f,  0.5f}, .normal = { 0.0f,  1.0f,  0.0f}, .uv_0 = {0.0f, 0.0f}},
-			Vertex{.position = { 0.5f,  0.5f,  0.5f}, .normal = { 0.0f,  1.0f,  0.0f}, .uv_0 = {1.0f, 0.0f}},
-			Vertex{.position = { 0.5f,  0.5f, -0.5f}, .normal = { 0.0f,  1.0f,  0.0f}, .uv_0 = {1.0f, 1.0f}},
-			Vertex{.position = {-0.5f,  0.5f, -0.5f}, .normal = { 0.0f,  1.0f,  0.0f}, .uv_0 = {0.0f, 1.0f}},
-			
-			Vertex{.position = {-0.5f, -0.5f, -0.5f},.normal = { 0.0f, -1.0f,  0.0f}, .uv_0 = {0.0f, 0.0f}},
-			Vertex{.position = { 0.5f, -0.5f, -0.5f},.normal = { 0.0f, -1.0f,  0.0f}, .uv_0 = {1.0f, 0.0f}},
-			Vertex{.position = { 0.5f, -0.5f,  0.5f},.normal = { 0.0f, -1.0f,  0.0f}, .uv_0 = {1.0f, 1.0f}},
-			Vertex{.position = {-0.5f, -0.5f,  0.5f},.normal = { 0.0f, -1.0f,  0.0f}, .uv_0 = {0.0f, 1.0f}}
-		};
+			Vertex{.position = {-0.5f, -0.5f, 0.5f}, .normal = {0.0f, 0.0f, 1.0f}, .uv_0 = {0.0f, 0.0f}},
+			Vertex{.position = {0.5f, -0.5f, 0.5f}, .normal = {0.0f, 0.0f, 1.0f}, .uv_0 = {1.0f, 0.0f}},
+			Vertex{.position = {0.5f, 0.5f, 0.5f}, .normal = {0.0f, 0.0f, 1.0f}, .uv_0 = {1.0f, 1.0f}},
+			Vertex{.position = {-0.5f, 0.5f, 0.5f}, .normal = {0.0f, 0.0f, 1.0f}, .uv_0 = {0.0f, 1.0f}},
+
+			Vertex{.position = {0.5f, -0.5f, -0.5f}, .normal = {0.0f, 0.0f, -1.0f}, .uv_0 = {0.0f, 0.0f}},
+			Vertex{.position = {-0.5f, -0.5f, -0.5f}, .normal = {0.0f, 0.0f, -1.0f}, .uv_0 = {1.0f, 0.0f}},
+			Vertex{.position = {-0.5f, 0.5f, -0.5f}, .normal = {0.0f, 0.0f, -1.0f}, .uv_0 = {1.0f, 1.0f}},
+			Vertex{.position = {0.5f, 0.5f, -0.5f}, .normal = {0.0f, 0.0f, -1.0f}, .uv_0 = {0.0f, 1.0f}},
+
+			Vertex{.position = {-0.5f, -0.5f, -0.5f}, .normal = {-1.0f, 0.0f, 0.0f}, .uv_0 = {0.0f, 0.0f}},
+			Vertex{.position = {-0.5f, -0.5f, 0.5f}, .normal = {-1.0f, 0.0f, 0.0f}, .uv_0 = {1.0f, 0.0f}},
+			Vertex{.position = {-0.5f, 0.5f, 0.5f}, .normal = {-1.0f, 0.0f, 0.0f}, .uv_0 = {1.0f, 1.0f}},
+			Vertex{.position = {-0.5f, 0.5f, -0.5f}, .normal = {-1.0f, 0.0f, 0.0f}, .uv_0 = {0.0f, 1.0f}},
+
+			Vertex{.position = {0.5f, -0.5f, 0.5f}, .normal = {1.0f, 0.0f, 0.0f}, .uv_0 = {0.0f, 0.0f}},
+			Vertex{.position = {0.5f, -0.5f, -0.5f}, .normal = {1.0f, 0.0f, 0.0f}, .uv_0 = {1.0f, 0.0f}},
+			Vertex{.position = {0.5f, 0.5f, -0.5f}, .normal = {1.0f, 0.0f, 0.0f}, .uv_0 = {1.0f, 1.0f}},
+			Vertex{.position = {0.5f, 0.5f, 0.5f}, .normal = {1.0f, 0.0f, 0.0f}, .uv_0 = {0.0f, 1.0f}},
+
+			Vertex{.position = {-0.5f, 0.5f, 0.5f}, .normal = {0.0f, 1.0f, 0.0f}, .uv_0 = {0.0f, 0.0f}},
+			Vertex{.position = {0.5f, 0.5f, 0.5f}, .normal = {0.0f, 1.0f, 0.0f}, .uv_0 = {1.0f, 0.0f}},
+			Vertex{.position = {0.5f, 0.5f, -0.5f}, .normal = {0.0f, 1.0f, 0.0f}, .uv_0 = {1.0f, 1.0f}},
+			Vertex{.position = {-0.5f, 0.5f, -0.5f}, .normal = {0.0f, 1.0f, 0.0f}, .uv_0 = {0.0f, 1.0f}},
+
+			Vertex{.position = {-0.5f, -0.5f, -0.5f}, .normal = {0.0f, -1.0f, 0.0f}, .uv_0 = {0.0f, 0.0f}},
+			Vertex{.position = {0.5f, -0.5f, -0.5f}, .normal = {0.0f, -1.0f, 0.0f}, .uv_0 = {1.0f, 0.0f}},
+			Vertex{.position = {0.5f, -0.5f, 0.5f}, .normal = {0.0f, -1.0f, 0.0f}, .uv_0 = {1.0f, 1.0f}},
+			Vertex{.position = {-0.5f, -0.5f, 0.5f}, .normal = {0.0f, -1.0f, 0.0f}, .uv_0 = {0.0f, 1.0f}}};
 
 		std::vector<uint32_t> indices = {
-			0, 1, 2,   2, 3, 0,
-			4, 5, 6,   6, 7, 4,
-			8, 9, 10,  10, 11, 8,
+			0, 1, 2, 2, 3, 0,
+			4, 5, 6, 6, 7, 4,
+			8, 9, 10, 10, 11, 8,
 			12, 13, 14, 14, 15, 12,
 			16, 17, 18, 18, 19, 16,
 			20, 21, 22, 22, 23, 20
@@ -64,45 +63,54 @@ namespace
 
 	struct BasicShapesNodeVulkanObjects
 	{
-		struct GraphicsPipelineData {
-			struct PushConstantRange {
-
+		struct GraphicsPipelineData
+		{
+			struct PushConstantRange
+			{
+				uint64_t mvp_ptr;
 			};
 
 			VkPipeline pipeline;
 
-			struct DescHeap {
+			struct DescHeap
+			{
 				Buffer buffer;
 			};
 
-			struct DescBuffer {
+			struct DescBuffer
+			{
 				Buffer buffer;
 				VkPipelineLayout pipeline_layout;
 			};
 
-			union {
+			union
+			{
 				DescHeap desc_heap;
 				DescBuffer desc_buffer;
 			};
 		};
 
-		struct ComputePipelineData {
-			struct PushConstantRange {
-
+		struct ComputePipelineData
+		{
+			struct PushConstantRange
+			{
 			};
 
 			VkPipeline pipeline;
 
-			struct DescHeap {
+			struct DescHeap
+			{
 				Buffer buffer;
 			};
 
-			struct DescBuffer {
+			struct DescBuffer
+			{
 				Buffer buffer;
 				VkPipelineLayout pipeline_layout;
 			};
 
-			union {
+			union
+			{
 				DescHeap desc_heap;
 				DescBuffer desc_buffer;
 			};
@@ -118,7 +126,7 @@ namespace
 		int node_id;
 		int input_attr_id;
 		int output_attr_id;
-		std::vector<const char*> shape_names;
+		std::vector<const char *> shape_names;
 		size_t selected_idx;
 	};
 
@@ -138,7 +146,6 @@ void SceneGraph_BasicShapesNode_GraphicsPipeline_Create()
 
 	if (descriptor_mode == EDescriptorMode::DescHeap)
 	{
-
 	}
 	else if (descriptor_mode == EDescriptorMode::DescBuffer)
 	{
@@ -161,7 +168,6 @@ void SceneGraph_BasicShapesNode_GraphicsPipeline_Create()
 	}
 	else if (descriptor_mode == EDescriptorMode::DescIndex)
 	{
-
 	}
 
 	const VkPipelineShaderStageCreateInfo stages[] = {
@@ -190,14 +196,26 @@ void SceneGraph_BasicShapesNode_GraphicsPipeline_Create()
 		{
 			.location = 0,
 			.binding = 0,
-			.format = VK_FORMAT_A1B5G5R5_UNORM_PACK16,
+			.format = VK_FORMAT_R32G32B32_SFLOAT,
 			.offset = 0,
+		},
+		{
+			.location = 1,
+		 	.binding = 0,
+		 	.format = VK_FORMAT_R32G32B32_SFLOAT,
+		 	.offset = sizeof(vec3)
+		},
+		{
+			.location = 2,
+		 	.binding = 0,
+		 	.format = VK_FORMAT_R32G32_SFLOAT,
+		 	.offset = sizeof(vec3) + sizeof(vec3)
 		}
 	};
 
 	const VkPipelineVertexInputStateCreateInfo vias = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-		.vertexBindingDescriptionCount = _countof(ibds) ,
+		.vertexBindingDescriptionCount = _countof(ibds),
 		.pVertexBindingDescriptions = ibds,
 		.vertexAttributeDescriptionCount = _countof(viads),
 		.pVertexAttributeDescriptions = viads,
@@ -208,9 +226,24 @@ void SceneGraph_BasicShapesNode_GraphicsPipeline_Create()
 		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
 	};
 
+	const VkViewport viewports[] = {
+		{},
+	};
+
+	const VkRect2D scissors[] = {
+		{},
+	};
+
+	const VkPipelineViewportStateCreateInfo vs = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+		.viewportCount = _countof(viewports),
+		.pViewports = viewports,
+		.scissorCount = _countof(scissors),
+		.pScissors = scissors,
+	};
+
 	constexpr VkPipelineRasterizationStateCreateInfo rs = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-		.rasterizerDiscardEnable = VK_TRUE,
 		.polygonMode = VK_POLYGON_MODE_FILL,
 		.cullMode = VK_CULL_MODE_BACK_BIT,
 		.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
@@ -248,6 +281,7 @@ void SceneGraph_BasicShapesNode_GraphicsPipeline_Create()
 		.pStages = stages,
 		.pVertexInputState = &vias,
 		.pInputAssemblyState = &ias,
+		.pViewportState = &vs,
 		.pRasterizationState = &rs,
 		.pMultisampleState = &ms,
 		.pDepthStencilState = &dss,
@@ -278,8 +312,7 @@ BasicShapesNode SceneGraph_BasicShapesNode_Create(ImVec2 position)
 		.input_attr_id = imnodes_id++,
 		.output_attr_id = imnodes_id++,
 		.shape_names = std::vector{"Cube", "Sphere"},
-		.selected_idx = 0
-	};
+		.selected_idx = 0};
 
 	return bsn;
 }
@@ -287,22 +320,21 @@ BasicShapesNode SceneGraph_BasicShapesNode_Create(ImVec2 position)
 void SceneGraph_AddBasicShapeNode(ImVec2 position)
 {
 	basic_shape_nodes.push_back(
-		//BasicShapesNode{
+		// BasicShapesNode{
 		//	.position = position,
 		//	.node_id = imnodes_id++,
 		//	.input_attr_id = imnodes_id++,
 		//	.output_attr_id = imnodes_id++,
 		//	.shape_names = std::vector{"Cube", "Sphere"},
 		//	.selected_idx = 0
-		//}
+		// }
 
-		SceneGraph_BasicShapesNode_Create(position)
-	);
+		SceneGraph_BasicShapesNode_Create(position));
 }
 
 void SceneGraph_Display()
 {
-	for (auto& bsn : basic_shape_nodes)
+	for (auto &bsn : basic_shape_nodes)
 	{
 		ImNodes::BeginNode(bsn.node_id);
 		ImNodes::BeginNodeTitleBar();
@@ -339,7 +371,7 @@ void SceneGraph_Display()
 
 void SceneGraph_Render(VkCommandBuffer cmd_buff)
 {
-	for (const auto& bsn : basic_shape_nodes)
+	for (const auto &bsn : basic_shape_nodes)
 	{
 		if (bsn.selected_idx == 0) // Cube
 		{
@@ -358,18 +390,12 @@ void SceneGraph_DisconnectAttributes()
 {
 }
 
-void SceneGraph_BasicShapesNodes_Destroy()
-{
-	SceneGraph_BasicShapesNodesGraphicsPipeline_Destroy();
-}
-
 void SceneGraph_BasicShapesNodesGraphicsPipeline_Destroy()
 {
 	vkDestroyPipeline(Device_Device(), bsn_vo.graphics_pipeline_data.pipeline, nullptr);
 
 	if (descriptor_mode == EDescriptorMode::DescHeap)
 	{
-
 	}
 	else if (descriptor_mode == EDescriptorMode::DescBuffer)
 	{
@@ -378,8 +404,12 @@ void SceneGraph_BasicShapesNodesGraphicsPipeline_Destroy()
 	}
 	else if (descriptor_mode == EDescriptorMode::DescIndex)
 	{
-
 	}
+}
+
+void SceneGraph_BasicShapesNodes_Destroy()
+{
+	SceneGraph_BasicShapesNodesGraphicsPipeline_Destroy();
 }
 
 void SceneGraph_Destroy()

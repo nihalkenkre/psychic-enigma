@@ -79,6 +79,7 @@ void Renderer_Create(SDL_Window* window)
 
 	Task_Create(renderer_task, Device_Graphics_Queue(), PhysicalDeviceData_GraphicsQueueFamilyIndex(), Swapchain_MaxFramesInFlight(), "renderer task");
 	Task_AddImages_Create();
+	SceneGraph_Create();
 }
 
 void Renderer_OnWindowResized()
